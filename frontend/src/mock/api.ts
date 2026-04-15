@@ -54,7 +54,9 @@ async function isDemoMode(): Promise<boolean> {
   if (_demoMode !== null) return _demoMode;
   try {
     const res = await _realFetch("/api/health", { signal: AbortSignal.timeout(3000) });
-    _demoMode = !res.ok;
+    const contentType = res.headers.get("content-type") || "";
+    // Must be JSON and 200 — GitHub Pages returns 200 HTML for all paths
+    _demoMode = !res.ok || !contentType.includes("application/json");
   } catch {
     _demoMode = true;
   }
