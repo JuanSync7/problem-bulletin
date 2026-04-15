@@ -14,7 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import AdminUser, CurrentUser, get_current_user, require_owner_or_admin
 from app.database import get_db
-from app.enums import ProblemStatus, SortMode
+from app.enums import NotificationType, ProblemStatus, SortMode
+from app.services.delivery import push_ws_notification, schedule_teams_webhook
+from app.services.notifications import generate_notification
+from app.services.watches import auto_watch
 from app.models.problem import Problem
 from app.schemas import CursorPage, ProblemCreate, ProblemDetailResponse, ProblemResponse
 from app.services.feed import get_feed
@@ -55,24 +58,35 @@ async def list_problems(
     sort: SortMode = Query(SortMode.new, description="Sort mode"),
     filter_status: ProblemStatus | None = Query(None, alias="status", description="Filter by status"),
     category_id: str | None = Query(None, description="Filter by category ID"),
+    domain_id: str | None = Query(None, alias="domain", description="Filter by domain ID"),
     tag_ids: str | None = Query(None, description="Comma-separated tag IDs"),
     is_claimed: bool | None = Query(None, description="Filter by claim status"),
+    date_from: str | None = Query(None, description="Filter from date (ISO format)"),
+    date_to: str | None = Query(None, description="Filter to date (ISO format)"),
     cursor: str | None = Query(None, description="Opaque pagination cursor"),
     limit: int = Query(20, ge=1, le=50, description="Page size (max 50)"),
     db: AsyncSession = Depends(get_db),
 ) -> CursorPage[ProblemResponse]:
     """Paginated problem feed with sort and filter.  REQ-168 .. REQ-182."""
+    from datetime import datetime
+
     parsed_tag_ids: list[str] | None = None
     if tag_ids:
         parsed_tag_ids = [t.strip() for t in tag_ids.split(",") if t.strip()]
+
+    parsed_date_from = datetime.fromisoformat(date_from) if date_from else None
+    parsed_date_to = datetime.fromisoformat(date_to) if date_to else None
 
     return await get_feed(
         db,
         sort=sort,
         filter_status=filter_status,
         category_id=category_id,
+        domain_id=domain_id,
         tag_ids=parsed_tag_ids,
         is_claimed=is_claimed,
+        date_from=parsed_date_from,
+        date_to=parsed_date_to,
         cursor=cursor,
         limit=limit,
     )
@@ -89,6 +103,9 @@ async def create_problem_route(
         problem = await create_problem(db, str(user.id), data)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    # Auto-watch: author watches their own problem
+    await auto_watch(db, str(user.id), str(problem.id))
 
     detail = await get_problem(db, str(problem.id), str(user.id))
     return ProblemDetailResponse(**detail)
@@ -161,6 +178,14 @@ async def transition_status_route(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
+    # Notify watchers of status change
+    notifications = await generate_notification(
+        db, NotificationType.status_changed, problem_id, str(user.id)
+    )
+    for n in notifications:
+        await push_ws_notification(n)
+        schedule_teams_webhook(n)
+
     detail = await get_problem(db, problem_id, str(user.id))
     return ProblemDetailResponse(**detail)
 
@@ -179,6 +204,15 @@ async def claim_problem_route(
 
     if claim is None:
         return {"detail": "Claim removed", "claimed": False}
+
+    # Notify watchers of claim
+    notifications = await generate_notification(
+        db, NotificationType.problem_claimed, problem_id, str(user.id)
+    )
+    for n in notifications:
+        await push_ws_notification(n)
+        schedule_teams_webhook(n)
+
     return {
         "detail": "Claim added",
         "claimed": True,
@@ -197,6 +231,14 @@ async def pin_problem_route(
         await pin_problem(db, problem_id, str(user.id))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+    # Notify watchers of pin
+    notifications = await generate_notification(
+        db, NotificationType.problem_pinned, problem_id, str(user.id)
+    )
+    for n in notifications:
+        await push_ws_notification(n)
+        schedule_teams_webhook(n)
 
     detail = await get_problem(db, problem_id, str(user.id))
     return ProblemDetailResponse(**detail)

@@ -121,8 +121,11 @@ def _apply_filters(
     *,
     filter_status: ProblemStatus | None = None,
     category_id: str | None = None,
+    domain_id: str | None = None,
     tag_ids: list[str] | None = None,
     is_claimed: bool | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
 ) -> Select:
     """AND together all non-None filters."""
     conditions: list[Any] = []
@@ -132,6 +135,9 @@ def _apply_filters(
 
     if category_id is not None:
         conditions.append(Problem.category_id == uuid.UUID(category_id))
+
+    if domain_id is not None:
+        conditions.append(Problem.domain_id == uuid.UUID(domain_id))
 
     if tag_ids:
         from app.models.problem import ProblemTag
@@ -151,6 +157,12 @@ def _apply_filters(
             conditions.append(claim_exists)
         else:
             conditions.append(~claim_exists)
+
+    if date_from is not None:
+        conditions.append(Problem.created_at >= date_from)
+
+    if date_to is not None:
+        conditions.append(Problem.created_at <= date_to)
 
     if conditions:
         stmt = stmt.where(and_(*conditions))
@@ -288,8 +300,11 @@ async def get_feed(
     sort: SortMode = SortMode.new,
     filter_status: ProblemStatus | None = None,
     category_id: str | None = None,
+    domain_id: str | None = None,
     tag_ids: list[str] | None = None,
     is_claimed: bool | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
     cursor: str | None = None,
     limit: int = 20,
 ) -> CursorPage[ProblemResponse]:
@@ -311,8 +326,11 @@ async def get_feed(
             pinned_stmt,
             filter_status=filter_status,
             category_id=category_id,
+            domain_id=domain_id,
             tag_ids=tag_ids,
             is_claimed=is_claimed,
+            date_from=date_from,
+            date_to=date_to,
         )
         # Always sort pinned by newest first
         pinned_stmt = pinned_stmt.order_by(Problem.created_at.desc())
@@ -333,8 +351,11 @@ async def get_feed(
         base_stmt,
         filter_status=filter_status,
         category_id=category_id,
+        domain_id=domain_id,
         tag_ids=tag_ids,
         is_claimed=is_claimed,
+        date_from=date_from,
+        date_to=date_to,
     )
 
     # Apply sort

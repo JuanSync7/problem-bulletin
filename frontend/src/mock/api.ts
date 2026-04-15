@@ -11,6 +11,7 @@ import {
   MOCK_CATEGORIES,
   MOCK_DOMAINS,
   MOCK_USERS,
+  MOCK_TAGS,
 } from "./data";
 
 // Capture the real fetch before any overrides
@@ -98,7 +99,7 @@ function matchRoute(url: string, method: string): RouteMatch | null {
     [/^\/api\/domains$/, "domains"],
     [/^\/api\/leaderboard$/, "leaderboard"],
     [/^\/api\/search$/, "search"],
-    [/^\/api\/tags$/, "empty_array"],
+    [/^\/api\/tags$/, "tags"],
     [/^\/api\/notifications$/, "empty_array"],
     [/^\/api\/health$/, "health"],
   ];
@@ -147,8 +148,35 @@ function handleMutation(route: string, params: Record<string, string>, body: any
 function getMockResponse(route: string, params: Record<string, string>, url: string): any {
   switch (route) {
     case "problems_list": {
-      // Return problems with live upstar state
-      const items = MOCK_PROBLEMS.map((p) => ({
+      const searchParams = new URL(url, window.location.origin).searchParams;
+      const filterCategory = searchParams.get("category");
+      const filterDomain = searchParams.get("domain");
+      const filterStatus = searchParams.get("status");
+      const filterDateFrom = searchParams.get("date_from");
+      const filterDateTo = searchParams.get("date_to");
+
+      let filtered = MOCK_PROBLEMS as typeof MOCK_PROBLEMS;
+
+      if (filterCategory) {
+        filtered = filtered.filter((p) => p.category?.id === filterCategory);
+      }
+      if (filterDomain) {
+        filtered = filtered.filter((p) => p.domain?.id === filterDomain);
+      }
+      if (filterStatus) {
+        const statuses = filterStatus.split(",");
+        filtered = filtered.filter((p) => statuses.includes(p.status));
+      }
+      if (filterDateFrom) {
+        const from = new Date(filterDateFrom).getTime();
+        filtered = filtered.filter((p) => new Date(p.created_at).getTime() >= from);
+      }
+      if (filterDateTo) {
+        const to = new Date(filterDateTo).getTime();
+        filtered = filtered.filter((p) => new Date(p.created_at).getTime() <= to);
+      }
+
+      const items = filtered.map((p) => ({
         ...p,
         upstar_count: _upstarCounts[p.id] ?? p.upstar_count,
         is_upstarred: _upstarred.has(p.id),
@@ -206,6 +234,11 @@ function getMockResponse(route: string, params: Record<string, string>, url: str
           display_id: p.display_id,
         }));
       return { results };
+    }
+    case "tags": {
+      const q = new URL(url, window.location.origin).searchParams.get("q") || "";
+      if (!q) return MOCK_TAGS;
+      return MOCK_TAGS.filter((t: any) => t.name.toLowerCase().includes(q.toLowerCase()));
     }
     case "empty_array":
       return [];

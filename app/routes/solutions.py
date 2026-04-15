@@ -13,7 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import CurrentUser, get_current_user
 from app.database import get_db
-from app.enums import UserRole
+from app.enums import NotificationType, UserRole
+from app.services.delivery import push_ws_notification, schedule_teams_webhook
+from app.services.notifications import generate_notification
+from app.services.watches import auto_watch
 from app.schemas import (
     SolutionCreate,
     SolutionResponse,
@@ -70,6 +73,17 @@ async def create_solution_route(
         solution = await create_solution(db, problem_id, str(user.id), data)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    # Auto-watch: solution author watches the problem
+    await auto_watch(db, str(user.id), problem_id)
+    # Notify watchers
+    notifications = await generate_notification(
+        db, NotificationType.solution_posted, problem_id, str(user.id),
+        solution_id=str(solution.id),
+    )
+    for n in notifications:
+        await push_ws_notification(n)
+        schedule_teams_webhook(n)
 
     detail = await get_solution(db, str(solution.id), viewer_id=str(user.id))
     # Admin override for anonymous masking
@@ -225,6 +239,15 @@ async def accept_solution_route(
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
 
+    # Notify watchers of acceptance
+    notifications = await generate_notification(
+        db, NotificationType.solution_accepted, str(solution.problem_id), str(user.id),
+        solution_id=str(solution.id),
+    )
+    for n in notifications:
+        await push_ws_notification(n)
+        schedule_teams_webhook(n)
+
     detail = await get_solution(db, str(solution.id), viewer_id=str(user.id))
     return SolutionResponse(**detail)
 
@@ -243,6 +266,15 @@ async def update_solution_status_route(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+
+    # Notify watchers of status change
+    notifications = await generate_notification(
+        db, NotificationType.status_changed, str(solution.problem_id), str(user.id),
+        solution_id=str(solution.id),
+    )
+    for n in notifications:
+        await push_ws_notification(n)
+        schedule_teams_webhook(n)
 
     detail = await get_solution(db, str(solution.id), viewer_id=str(user.id))
     return SolutionResponse(**detail)

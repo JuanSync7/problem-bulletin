@@ -44,6 +44,8 @@ export default function Feed() {
   const [statusFilters, setStatusFilters] = useState<ProblemStatus[]>([]);
   const [category, setCategory] = useState("");
   const [domain, setDomain] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const sentinelRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -69,6 +71,15 @@ export default function Feed() {
         }
         if (category) {
           params.set("category", category);
+        }
+        if (domain) {
+          params.set("domain", domain);
+        }
+        if (dateFrom) {
+          params.set("date_from", dateFrom);
+        }
+        if (dateTo) {
+          params.set("date_to", dateTo);
         }
         if (loadCursor) {
           params.set("cursor", loadCursor);
@@ -100,7 +111,7 @@ export default function Feed() {
         setIsLoadingMore(false);
       }
     },
-    [sort, statusFilters, category, domain],
+    [sort, statusFilters, category, domain, dateFrom, dateTo],
   );
 
   // Reset and fetch on filter/sort change
@@ -144,10 +155,14 @@ export default function Feed() {
         statusFilters={statusFilters}
         category={category}
         domain={domain}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
         onSort={setSort}
         onStatusFilter={setStatusFilters}
         onCategoryFilter={setCategory}
         onDomainFilter={setDomain}
+        onDateFromFilter={setDateFrom}
+        onDateToFilter={setDateTo}
       />
 
       {error && (

@@ -27,10 +27,14 @@ interface SortFilterBarProps {
   statusFilters: ProblemStatus[];
   category: string;
   domain: string;
+  dateFrom: string;
+  dateTo: string;
   onSort: (sort: SortOption) => void;
   onStatusFilter: (statuses: ProblemStatus[]) => void;
   onCategoryFilter: (category: string) => void;
   onDomainFilter: (domain: string) => void;
+  onDateFromFilter: (date: string) => void;
+  onDateToFilter: (date: string) => void;
 }
 
 export function SortFilterBar({
@@ -38,10 +42,14 @@ export function SortFilterBar({
   statusFilters,
   category,
   domain,
+  dateFrom,
+  dateTo,
   onSort,
   onStatusFilter,
   onCategoryFilter,
   onDomainFilter,
+  onDateFromFilter,
+  onDateToFilter,
 }: SortFilterBarProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [domains, setDomains] = useState<Domain[]>([]);
@@ -145,6 +153,27 @@ export function SortFilterBar({
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="sort-filter-bar__date-range">
+        <span className="sort-filter-bar__label">Date Range</span>
+        <div className="sort-filter-bar__date-inputs">
+          <input
+            type="date"
+            className="sort-filter-bar__date-input"
+            value={dateFrom}
+            onChange={(e) => onDateFromFilter(e.target.value)}
+            placeholder="From"
+          />
+          <span className="sort-filter-bar__date-sep">–</span>
+          <input
+            type="date"
+            className="sort-filter-bar__date-input"
+            value={dateTo}
+            onChange={(e) => onDateToFilter(e.target.value)}
+            placeholder="To"
+          />
+        </div>
       </div>
     </div>
   );

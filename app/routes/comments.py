@@ -10,7 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import CurrentUser, get_current_user
 from app.database import get_db
+from app.enums import NotificationType
 from app.schemas import CommentCreate, CommentResponse, CommentUpdate
+from app.services.delivery import push_ws_notification, schedule_teams_webhook
+from app.services.notifications import generate_notification
+from app.services.watches import auto_watch
 from app.services.comments import (
     create_comment,
     delete_comment,
@@ -39,6 +43,15 @@ async def create_problem_comment(
 ) -> CommentResponse:
     """Create a comment on a problem.  REQ-258."""
     comment = await create_comment(db, problem_id, None, str(user.id), data)
+    # Auto-watch: commenter watches the problem
+    await auto_watch(db, str(user.id), problem_id)
+    # Notify watchers
+    notifications = await generate_notification(
+        db, NotificationType.comment_posted, problem_id, str(user.id),
+    )
+    for n in notifications:
+        await push_ws_notification(n)
+        schedule_teams_webhook(n)
     comments = await get_comments(db, problem_id, None, requester=user)
     # Find the just-created comment in the flat list
     return _find_comment(comments, str(comment.id))
@@ -93,6 +106,15 @@ async def create_solution_comment(
 
     problem_id = str(solution.problem_id)
     comment = await create_comment(db, problem_id, solution_id, str(user.id), data)
+    # Auto-watch: commenter watches the problem
+    await auto_watch(db, str(user.id), problem_id)
+    # Notify watchers
+    notifications = await generate_notification(
+        db, NotificationType.comment_posted, problem_id, str(user.id),
+    )
+    for n in notifications:
+        await push_ws_notification(n)
+        schedule_teams_webhook(n)
     comments = await get_comments(db, problem_id, solution_id, requester=user)
     return _find_comment(comments, str(comment.id))
 

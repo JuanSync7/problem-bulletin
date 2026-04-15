@@ -266,4 +266,18 @@ export const MOCK_LEADERBOARD = {
   ],
 };
 
+export const MOCK_TAGS = (() => {
+  const seen = new Map<string, { id: string; name: string; usage_count: number }>();
+  for (const p of MOCK_PROBLEMS) {
+    for (const tag of p.tags) {
+      if (seen.has(tag.id)) {
+        seen.get(tag.id)!.usage_count += 1;
+      } else {
+        seen.set(tag.id, { id: tag.id, name: tag.name, usage_count: 1 });
+      }
+    }
+  }
+  return Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name));
+})();
+
 export { MOCK_USERS, MOCK_CATEGORIES, MOCK_DOMAINS };

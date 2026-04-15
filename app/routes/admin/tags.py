@@ -63,6 +63,7 @@ class TagBasicOut(BaseModel):
 @public_router.get("/tags", response_model=list[TagOut])
 async def list_tags(
     sort: str = "name",
+    q: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     """List all tags with usage counts.  REQ-460."""
@@ -71,7 +72,7 @@ async def list_tags(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="sort must be 'name' or 'usage'",
         )
-    return await get_tags(db, sort=sort)
+    return await get_tags(db, sort=sort, q=q)
 
 
 # ---------------------------------------------------------------------------

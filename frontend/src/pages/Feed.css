@@ -85,6 +85,32 @@
   text-transform: capitalize;
 }
 
+.sort-filter-bar__date-range {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.sort-filter-bar__date-inputs {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.sort-filter-bar__date-input {
+  padding: 0.375rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.8125rem;
+}
+
+.sort-filter-bar__date-sep {
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+
 /* Lists & States */
 
 .feed__list {

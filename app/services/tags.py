@@ -27,7 +27,7 @@ class TagMergeError(Exception):
         super().__init__(detail)
 
 
-async def get_tags(db: AsyncSession, sort: str = "name") -> list[dict]:
+async def get_tags(db: AsyncSession, sort: str = "name", q: str | None = None) -> list[dict]:
     """Return all tags with usage_count.  REQ-460.
 
     *sort* can be ``"name"`` (alphabetical) or ``"usage"`` (descending count).
@@ -40,6 +40,9 @@ async def get_tags(db: AsyncSession, sort: str = "name") -> list[dict]:
         .outerjoin(ProblemTag, ProblemTag.tag_id == Tag.id)
         .group_by(Tag.id)
     )
+
+    if q:
+        stmt = stmt.where(Tag.name.ilike(f"%{q}%"))
 
     if sort == "usage":
         stmt = stmt.order_by(usage_count.desc(), Tag.name)
