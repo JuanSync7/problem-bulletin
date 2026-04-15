@@ -114,6 +114,32 @@
   z-index: 1;
 }
 
+/* Pin-drop animation for selected bounties */
+.landing__bounty--animated {
+  opacity: 0;
+  transform: scale(0.3) rotate(0deg) translateY(-80px);
+  animation: pin-drop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation-delay: var(--pin-delay, 0s);
+}
+
+@keyframes pin-drop {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) translateY(-80px) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1) translateY(5px) rotate(var(--pin-rotate, 0deg));
+  }
+  70% {
+    transform: scale(0.95) translateY(-2px) rotate(var(--pin-rotate, 0deg));
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0) rotate(var(--pin-rotate, 0deg));
+  }
+}
+
 .landing__bounty:hover {
   transform: scale(1.05) !important;
   box-shadow:

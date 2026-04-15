@@ -45,6 +45,9 @@ const POSITIONS = [
   { top: "84%", left: "80%", rotate: 1.2 },
 ];
 
+// Indices of bounties that animate in on page load (0-based)
+const ANIMATED_INDICES = new Set([1, 3, 5, 7, 9]);
+
 export default function Landing() {
   const auth = useAuth();
   const isDemo = useIsDemoMode();
@@ -67,14 +70,19 @@ export default function Landing() {
         {/* Scattered bounty notes */}
         {BOUNTIES.map((bounty, i) => {
           const pos = POSITIONS[i];
+          const isAnimated = ANIMATED_INDICES.has(i);
           return (
             <div
               key={bounty.title}
-              className="landing__bounty"
+              className={`landing__bounty${isAnimated ? " landing__bounty--animated" : ""}`}
               style={{
                 top: pos.top,
                 left: pos.left,
                 transform: `rotate(${pos.rotate}deg)`,
+                ...(isAnimated ? {
+                  "--pin-delay": `${[...ANIMATED_INDICES].indexOf(i) * 0.35 + 0.3}s`,
+                  "--pin-rotate": `${pos.rotate}deg`,
+                } as React.CSSProperties : {}),
               }}
             >
               <div
