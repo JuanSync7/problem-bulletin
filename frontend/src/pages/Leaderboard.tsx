@@ -55,7 +55,7 @@ export default function Leaderboard() {
       }
       const data = await res.json();
       if (!controller.signal.aborted) {
-        const raw: any[] = data.entries ?? data ?? [];
+        const raw: any[] = Array.isArray(data.entries) ? data.entries : Array.isArray(data) ? data : [];
         setEntries(raw.map((e: any, i: number) => ({
           rank: e.rank ?? i + 1,
           userId: e.userId ?? e.user_id ?? "",
