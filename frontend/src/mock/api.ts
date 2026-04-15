@@ -1,6 +1,7 @@
 /**
  * Mock API layer for GitHub Pages demo mode.
  * Wraps fetch() — if the real API is unreachable, returns mock data.
+ * Tracks upstar/upvote state in memory for interactive demo.
  */
 
 import {
@@ -9,7 +10,6 @@ import {
   MOCK_COMMENTS,
   MOCK_CATEGORIES,
   MOCK_DOMAINS,
-  MOCK_LEADERBOARD,
   MOCK_USERS,
 } from "./data";
 
@@ -17,6 +17,38 @@ import {
 const _realFetch = window.fetch.bind(window);
 
 let _demoMode: boolean | null = null;
+
+// In-memory state for interactive demo
+const _upstarred = new Set<string>(["p2"]); // p2 starts upstarred per mock data
+const _upvoted = new Set<string>();
+const _upstarCounts: Record<string, number> = {};
+const _upvoteCounts: Record<string, number> = {};
+
+// Initialize counts from mock data
+for (const p of MOCK_PROBLEMS) {
+  _upstarCounts[p.id] = p.upstar_count;
+}
+for (const [, sols] of Object.entries(MOCK_SOLUTIONS)) {
+  for (const s of sols) {
+    _upvoteCounts[s.id] = s.upvote_count;
+    if (s.is_upvoted) _upvoted.add(s.id);
+  }
+}
+
+// Leaderboard data in the shape the frontend expects
+const LEADERBOARD_SOLVERS = [
+  { rank: 1, userId: "u2", displayName: "Bob Martinez", score: 8, problemCount: 4 },
+  { rank: 2, userId: "u1", displayName: "Alice Chen", score: 6, problemCount: 12 },
+  { rank: 3, userId: "u4", displayName: "Dave Patel", score: 5, problemCount: 9 },
+  { rank: 4, userId: "u3", displayName: "Carol Kim", score: 3, problemCount: 7 },
+];
+
+const LEADERBOARD_REPORTERS = [
+  { rank: 1, userId: "u1", displayName: "Alice Chen", score: 12, problemCount: 12 },
+  { rank: 2, userId: "u4", displayName: "Dave Patel", score: 9, problemCount: 9 },
+  { rank: 3, userId: "u3", displayName: "Carol Kim", score: 7, problemCount: 7 },
+  { rank: 4, userId: "u2", displayName: "Bob Martinez", score: 4, problemCount: 4 },
+];
 
 async function isDemoMode(): Promise<boolean> {
   if (_demoMode !== null) return _demoMode;
@@ -29,9 +61,27 @@ async function isDemoMode(): Promise<boolean> {
   return _demoMode;
 }
 
-function matchRoute(url: string): { route: string; params: Record<string, string> } | null {
+interface RouteMatch {
+  route: string;
+  params: Record<string, string>;
+}
+
+function matchRoute(url: string, method: string): RouteMatch | null {
   const path = url.replace(/\?.*$/, "");
 
+  // POST/mutation routes first
+  if (method === "POST") {
+    let m = path.match(/^\/api\/problems\/([^/]+)\/upstar$/);
+    if (m) return { route: "upstar_toggle", params: { id: m[1] } };
+
+    m = path.match(/^\/api\/solutions\/([^/]+)\/upvote$/);
+    if (m) return { route: "upvote_toggle", params: { id: m[1] } };
+
+    m = path.match(/^\/api\/solutions\/([^/]+)\/status$/);
+    if (m) return { route: "solution_status", params: { id: m[1] } };
+  }
+
+  // GET routes
   const patterns: [RegExp, string][] = [
     [/^\/api\/auth\/me$/, "auth_me"],
     [/^\/api\/problems\/([^/]+)\/solutions$/, "problem_solutions"],
@@ -43,33 +93,81 @@ function matchRoute(url: string): { route: string; params: Record<string, string
     [/^\/api\/problems$/, "problems_list"],
     [/^\/api\/categories$/, "categories"],
     [/^\/api\/domains$/, "domains"],
+    [/^\/api\/leaderboard$/, "leaderboard"],
     [/^\/api\/search$/, "search"],
-    [/^\/api\/leaderboard\/solvers$/, "leaderboard_solvers"],
-    [/^\/api\/leaderboard\/reporters$/, "leaderboard_reporters"],
     [/^\/api\/tags$/, "empty_array"],
     [/^\/api\/notifications$/, "empty_array"],
+    [/^\/api\/health$/, "health"],
   ];
 
   for (const [regex, route] of patterns) {
-    const match = path.match(regex);
-    if (match) {
-      return { route, params: { id: match[1] || "" } };
-    }
+    const m = path.match(regex);
+    if (m) return { route, params: { id: m[1] || "" } };
   }
   return null;
+}
+
+function handleMutation(route: string, params: Record<string, string>, body: any): any {
+  switch (route) {
+    case "upstar_toggle": {
+      const id = params.id;
+      const wasActive = _upstarred.has(id);
+      if (wasActive) {
+        _upstarred.delete(id);
+        _upstarCounts[id] = (_upstarCounts[id] ?? 1) - 1;
+      } else {
+        _upstarred.add(id);
+        _upstarCounts[id] = (_upstarCounts[id] ?? 0) + 1;
+      }
+      return { active: !wasActive, count: _upstarCounts[id] };
+    }
+    case "upvote_toggle": {
+      const id = params.id;
+      const wasActive = _upvoted.has(id);
+      if (wasActive) {
+        _upvoted.delete(id);
+        _upvoteCounts[id] = (_upvoteCounts[id] ?? 1) - 1;
+      } else {
+        _upvoted.add(id);
+        _upvoteCounts[id] = (_upvoteCounts[id] ?? 0) + 1;
+      }
+      return { active: !wasActive };
+    }
+    case "solution_status": {
+      return { ok: true, status: body?.status ?? "pending" };
+    }
+    default:
+      return { ok: true, detail: "Demo mode — changes not persisted" };
+  }
 }
 
 function getMockResponse(route: string, params: Record<string, string>, url: string): any {
   switch (route) {
     case "problems_list": {
-      return { items: MOCK_PROBLEMS, next_cursor: null };
+      // Return problems with live upstar state
+      const items = MOCK_PROBLEMS.map((p) => ({
+        ...p,
+        upstar_count: _upstarCounts[p.id] ?? p.upstar_count,
+        is_upstarred: _upstarred.has(p.id),
+      }));
+      return { items, next_cursor: null };
     }
     case "problem_detail": {
       const p = MOCK_PROBLEMS.find((p) => p.id === params.id);
-      return p || null;
+      if (!p) return null;
+      return {
+        ...p,
+        upstar_count: _upstarCounts[p.id] ?? p.upstar_count,
+        is_upstarred: _upstarred.has(p.id),
+      };
     }
     case "problem_solutions": {
-      return MOCK_SOLUTIONS[params.id] || [];
+      const sols = MOCK_SOLUTIONS[params.id] || [];
+      return sols.map((s: any) => ({
+        ...s,
+        upvote_count: _upvoteCounts[s.id] ?? s.upvote_count,
+        is_upvoted: _upvoted.has(s.id),
+      }));
     }
     case "problem_comments": {
       return MOCK_COMMENTS[params.id] || [];
@@ -80,34 +178,38 @@ function getMockResponse(route: string, params: Record<string, string>, url: str
     case "domains": {
       return MOCK_DOMAINS;
     }
+    case "leaderboard": {
+      const searchParams = new URL(url, window.location.origin).searchParams;
+      const track = searchParams.get("track") || "solvers";
+      return track === "reporters" ? LEADERBOARD_REPORTERS : LEADERBOARD_SOLVERS;
+    }
     case "search": {
       const q = new URL(url, window.location.origin).searchParams.get("q") || "";
       const results = MOCK_PROBLEMS
-        .filter((p) => p.title.toLowerCase().includes(q.toLowerCase()) || p.description.toLowerCase().includes(q.toLowerCase()))
+        .filter(
+          (p) =>
+            p.title.toLowerCase().includes(q.toLowerCase()) ||
+            p.description.toLowerCase().includes(q.toLowerCase()) ||
+            (p.display_id && p.display_id.toLowerCase().includes(q.toLowerCase()))
+        )
         .map((p) => ({
           problem_id: p.id,
           title: p.title,
           excerpt: p.description.slice(0, 150) + "...",
           rank: 1,
           match_source: "title",
-          upstar_count: p.upstar_count,
+          upstar_count: _upstarCounts[p.id] ?? p.upstar_count,
           created_at: p.created_at,
           display_id: p.display_id,
         }));
       return { results };
     }
-    case "leaderboard_solvers": {
-      return MOCK_LEADERBOARD.top_solvers;
-    }
-    case "leaderboard_reporters": {
-      return MOCK_LEADERBOARD.top_reporters;
-    }
-    case "empty_array": {
+    case "empty_array":
       return [];
-    }
-    case "empty_object": {
+    case "empty_object":
       return {};
-    }
+    case "health":
+      return { status: "ok" };
     case "auth_me": {
       return {
         id: MOCK_USERS[0].id,
@@ -138,17 +240,38 @@ export async function demoFetch(input: RequestInfo | URL, init?: RequestInit): P
     return _realFetch(input, init);
   }
 
-  // Demo mode — return mock data
-  const matched = matchRoute(url);
-  if (!matched) {
-    // For mutations (POST/DELETE/PATCH) in demo mode, return success
-    const method = init?.method?.toUpperCase() || "GET";
-    if (method !== "GET") {
-      return new Response(JSON.stringify({ ok: true, detail: "Demo mode — changes not persisted" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+  const method = init?.method?.toUpperCase() || "GET";
+
+  // Match route (method-aware)
+  const matched = matchRoute(url, method);
+
+  // Handle mutations with specific routes
+  if (method !== "GET" && matched) {
+    let body: any = null;
+    if (init?.body) {
+      try {
+        body = JSON.parse(init.body as string);
+      } catch {
+        /* ignore */
+      }
     }
+    const data = handleMutation(matched.route, matched.params, body);
+    return new Response(JSON.stringify(data), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // Handle unmatched mutations
+  if (method !== "GET") {
+    return new Response(JSON.stringify({ ok: true, detail: "Demo mode" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // Handle GET
+  if (!matched) {
     return new Response(JSON.stringify([]), {
       status: 200,
       headers: { "Content-Type": "application/json" },
