@@ -30,8 +30,12 @@ function matchRoute(url: string): { route: string; params: Record<string, string
   const path = url.replace(/\?.*$/, "");
 
   const patterns: [RegExp, string][] = [
+    [/^\/api\/auth\/me$/, "auth_me"],
     [/^\/api\/problems\/([^/]+)\/solutions$/, "problem_solutions"],
     [/^\/api\/problems\/([^/]+)\/comments$/, "problem_comments"],
+    [/^\/api\/problems\/([^/]+)\/attachments$/, "empty_array"],
+    [/^\/api\/problems\/([^/]+)\/edit-suggestions$/, "empty_array"],
+    [/^\/api\/problems\/([^/]+)\/watches$/, "empty_object"],
     [/^\/api\/problems\/([^/]+)$/, "problem_detail"],
     [/^\/api\/problems$/, "problems_list"],
     [/^\/api\/categories$/, "categories"],
@@ -39,7 +43,8 @@ function matchRoute(url: string): { route: string; params: Record<string, string
     [/^\/api\/search$/, "search"],
     [/^\/api\/leaderboard\/solvers$/, "leaderboard_solvers"],
     [/^\/api\/leaderboard\/reporters$/, "leaderboard_reporters"],
-    [/^\/api\/auth\/me$/, "auth_me"],
+    [/^\/api\/tags$/, "empty_array"],
+    [/^\/api\/notifications$/, "empty_array"],
   ];
 
   for (const [regex, route] of patterns) {
@@ -94,8 +99,21 @@ function getMockResponse(route: string, params: Record<string, string>, url: str
     case "leaderboard_reporters": {
       return MOCK_LEADERBOARD.top_reporters;
     }
+    case "empty_array": {
+      return [];
+    }
+    case "empty_object": {
+      return {};
+    }
     case "auth_me": {
-      return MOCK_USERS[0]; // Demo as Alice (admin)
+      // Return in the shape useAuth expects
+      return {
+        id: MOCK_USERS[0].id,
+        email: MOCK_USERS[0].email,
+        displayName: MOCK_USERS[0].display_name,
+        display_name: MOCK_USERS[0].display_name,
+        role: MOCK_USERS[0].role,
+      };
     }
     default:
       return null;
