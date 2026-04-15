@@ -100,8 +100,8 @@
 
 .landing__bounty {
   position: absolute;
-  width: 180px;
-  padding: 1rem 0.875rem 0.75rem;
+  width: clamp(100px, 16vw, 180px);
+  padding: clamp(0.5rem, 1vw, 1rem) clamp(0.5rem, 0.9vw, 0.875rem) clamp(0.375rem, 0.8vw, 0.75rem);
   background-color: var(--color-surface);
   border-radius: 2px;
   box-shadow:
@@ -138,7 +138,7 @@
   display: inline-block;
   padding: 0.125rem 0.375rem;
   border-radius: 3px;
-  font-size: 0.625rem;
+  font-size: clamp(0.5rem, 0.9vw, 0.625rem);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -149,7 +149,7 @@
 
 .landing__bounty-title {
   display: block;
-  font-size: 0.8125rem;
+  font-size: clamp(0.625rem, 1.2vw, 0.8125rem);
   font-weight: 600;
   color: var(--color-text);
   line-height: 1.35;
@@ -160,7 +160,7 @@
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  font-size: 0.75rem;
+  font-size: clamp(0.625rem, 1vw, 0.75rem);
   font-weight: 600;
   color: #D4940A;
 }
@@ -428,42 +428,23 @@
    =========================== */
 
 @media (max-width: 767px) {
-  .landing__bounty {
-    width: 150px;
-    padding: 0.75rem 0.75rem 0.625rem;
-  }
-
-  .landing__bounty-title {
-    font-size: 0.75rem;
-  }
-
   .landing__welcome-card {
     max-width: 360px;
     padding: 0 1rem;
   }
+
+  .landing__board-title {
+    font-size: 2.5rem;
+  }
 }
 
-/* ===========================
-   Responsive: Mobile (<480px)
-   =========================== */
-
 @media (max-width: 479px) {
-  .landing__bounty {
-    width: 120px;
-    padding: 0.625rem 0.5rem 0.5rem;
-    font-size: 0.6875rem;
-  }
-
-  .landing__bounty-title {
-    font-size: 0.6875rem;
-  }
-
-  .landing__bounty-tag {
-    font-size: 0.5625rem;
-  }
-
   .landing__welcome-card {
-    max-width: 320px;
+    max-width: 300px;
+  }
+
+  .landing__board-title {
+    font-size: 2rem;
   }
 
   .auth-card__inner {
