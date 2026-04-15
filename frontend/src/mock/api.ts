@@ -13,12 +13,15 @@ import {
   MOCK_USERS,
 } from "./data";
 
+// Capture the real fetch before any overrides
+const _realFetch = window.fetch.bind(window);
+
 let _demoMode: boolean | null = null;
 
 async function isDemoMode(): Promise<boolean> {
   if (_demoMode !== null) return _demoMode;
   try {
-    const res = await fetch("/api/health", { signal: AbortSignal.timeout(3000) });
+    const res = await _realFetch("/api/health", { signal: AbortSignal.timeout(3000) });
     _demoMode = !res.ok;
   } catch {
     _demoMode = true;
@@ -106,7 +109,6 @@ function getMockResponse(route: string, params: Record<string, string>, url: str
       return {};
     }
     case "auth_me": {
-      // Return in the shape useAuth expects
       return {
         id: MOCK_USERS[0].id,
         email: MOCK_USERS[0].email,
@@ -128,12 +130,12 @@ export async function demoFetch(input: RequestInfo | URL, init?: RequestInit): P
 
   // Only intercept API calls
   if (!url.startsWith("/api/")) {
-    return fetch(input, init);
+    return _realFetch(input, init);
   }
 
   // Try real API first
   if (!(await isDemoMode())) {
-    return fetch(input, init);
+    return _realFetch(input, init);
   }
 
   // Demo mode — return mock data
