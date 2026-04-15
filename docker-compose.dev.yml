@@ -1,0 +1,33 @@
+version: "3.8"
+
+# Development-only compose — runs PostgreSQL only.
+# Start backend and frontend separately (see comments below).
+#
+# Usage:
+#   docker compose -f docker-compose.dev.yml up -d
+#   Then in separate terminals:
+#     cd /home/juansync7/problem-bulletin && .venv/bin/uvicorn app.main:app --reload --port 8000
+#     cd /home/juansync7/problem-bulletin/frontend && npm run dev
+#
+#   Frontend: http://localhost:5173  (Vite proxies /api → localhost:8000)
+#   Backend:  http://localhost:8000
+
+services:
+  postgres:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: aion_bulletin
+      POSTGRES_USER: aion
+      POSTGRES_PASSWORD: changeme
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aion"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata_dev:

@@ -1,0 +1,360 @@
+/* ===========================
+   Landing Page
+   =========================== */
+
+.landing {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+
+  /* Cork-texture background using layered repeating gradients */
+  background-color: #c4a26e;
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.03) 2px,
+      rgba(0, 0, 0, 0.03) 4px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 3px,
+      rgba(139, 105, 56, 0.15) 3px,
+      rgba(139, 105, 56, 0.15) 5px
+    ),
+    radial-gradient(ellipse at 20% 50%, rgba(210, 170, 110, 0.5) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(180, 140, 80, 0.4) 0%, transparent 40%),
+    radial-gradient(ellipse at 50% 80%, rgba(160, 120, 60, 0.3) 0%, transparent 45%);
+}
+
+[data-theme="dark"] .landing {
+  background-color: #3d2e1a;
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.08) 2px,
+      rgba(0, 0, 0, 0.08) 4px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 3px,
+      rgba(60, 45, 25, 0.3) 3px,
+      rgba(60, 45, 25, 0.3) 5px
+    ),
+    radial-gradient(ellipse at 20% 50%, rgba(90, 70, 40, 0.4) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(80, 60, 35, 0.3) 0%, transparent 40%),
+    radial-gradient(ellipse at 50% 80%, rgba(70, 50, 30, 0.3) 0%, transparent 45%);
+}
+
+/* ===========================
+   Decorative Cards Grid
+   =========================== */
+
+.landing__cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.5rem;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 4rem 2rem 2rem;
+}
+
+.landing__deco-card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 1.25rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: box-shadow var(--transition-speed);
+  transform-origin: center center;
+  min-height: 100px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.landing__deco-card-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+  line-height: 1.4;
+}
+
+/* Push-pin dot */
+.landing__deco-card::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--gradient-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.landing__deco-card {
+  position: relative;
+}
+
+/* ===========================
+   Auth Overlay
+   =========================== */
+
+.landing__auth-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  background-color: rgba(0, 0, 0, 0.25);
+}
+
+[data-theme="dark"] .landing__auth-overlay {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+/* ===========================
+   AuthCard Styles
+   =========================== */
+
+.auth-card {
+  position: relative;
+  padding: 3px;
+  border-radius: 14px;
+  background: var(--gradient-primary);
+  width: 100%;
+  max-width: 400px;
+}
+
+.auth-card__inner {
+  background-color: var(--color-surface);
+  border-radius: 12px;
+  padding: 2rem;
+}
+
+.auth-card__title {
+  font-size: 1.375rem;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 1.5rem;
+  color: var(--color-text);
+}
+
+.auth-card__tabs {
+  display: flex;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 1.5rem;
+}
+
+.auth-card__tab {
+  flex: 1;
+  padding: 0.625rem 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  border-bottom: 2px solid transparent;
+  transition:
+    color var(--transition-speed),
+    border-color var(--transition-speed);
+  text-align: center;
+}
+
+.auth-card__tab:hover {
+  color: var(--color-text);
+}
+
+.auth-card__tab--active {
+  color: var(--color-text);
+  border-bottom-color: var(--color-primary-start);
+}
+
+.auth-card__body {
+  min-height: 110px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Microsoft button */
+.auth-card__ms-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  transition:
+    background-color var(--transition-speed),
+    border-color var(--transition-speed);
+}
+
+.auth-card__ms-btn:hover:not(:disabled) {
+  background-color: var(--color-border);
+}
+
+.auth-card__ms-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-card__ms-icon {
+  flex-shrink: 0;
+}
+
+/* Magic link form */
+.auth-card__magic-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.auth-card__label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.auth-card__input {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  outline: none;
+  transition: border-color var(--transition-speed);
+}
+
+.auth-card__input:focus {
+  border-color: var(--color-primary-start);
+}
+
+.auth-card__input::placeholder {
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+}
+
+.auth-card__submit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  background: var(--gradient-primary);
+  color: #1a1a1a;
+  transition: opacity var(--transition-speed);
+}
+
+.auth-card__submit-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.auth-card__submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Spinner */
+.auth-card__spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary-start);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Sent message */
+.auth-card__sent-msg {
+  text-align: center;
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  padding: 1rem 0;
+}
+
+/* Error */
+.auth-card__error {
+  margin-top: 1rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  color: var(--color-error);
+  background-color: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  text-align: center;
+}
+
+/* ===========================
+   Tagline
+   =========================== */
+
+.landing__tagline {
+  margin-top: 1.25rem;
+  font-size: 1.0625rem;
+  color: var(--color-surface);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  text-align: center;
+  font-weight: 500;
+}
+
+[data-theme="dark"] .landing__tagline {
+  color: var(--color-text-secondary);
+}
+
+/* ===========================
+   Responsive: Tablet (<768px)
+   =========================== */
+
+@media (max-width: 767px) {
+  .landing__cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    padding: 3rem 1rem 1.5rem;
+  }
+
+  .auth-card {
+    max-width: 360px;
+    margin: 0 1rem;
+  }
+}
+
+/* ===========================
+   Responsive: Mobile (<480px)
+   =========================== */
+
+@media (max-width: 479px) {
+  .landing__cards {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    padding: 2rem 1rem 1rem;
+  }
+
+  .auth-card__inner {
+    padding: 1.5rem;
+  }
+
+  .auth-card__title {
+    font-size: 1.25rem;
+  }
+}

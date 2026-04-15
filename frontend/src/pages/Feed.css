@@ -1,0 +1,235 @@
+/* ===========================
+   Feed Page
+   =========================== */
+
+.feed {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.feed__header {
+  margin-bottom: 1.25rem;
+}
+
+.feed__title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+/* Sort / Filter Bar */
+
+.sort-filter-bar {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.sort-filter-bar__label {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  margin-bottom: 0.25rem;
+}
+
+.sort-filter-bar__select {
+  display: block;
+  padding: 0.375rem 0.625rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color var(--transition-speed);
+}
+
+.sort-filter-bar__select:focus {
+  outline: none;
+  border-color: var(--color-primary-start);
+}
+
+.sort-filter-bar__checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.sort-filter-bar__checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: var(--color-text);
+}
+
+.sort-filter-bar__checkbox {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--color-primary-start);
+  cursor: pointer;
+}
+
+.sort-filter-bar__checkbox-text {
+  text-transform: capitalize;
+}
+
+/* Lists & States */
+
+.feed__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.feed__error {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  border-radius: 8px;
+  background-color: rgba(239, 68, 68, 0.08);
+  border: 1px solid var(--color-error);
+  color: var(--color-error);
+  font-size: 0.9375rem;
+}
+
+.feed__retry-btn {
+  flex-shrink: 0;
+  padding: 0.375rem 0.875rem;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background: var(--gradient-primary);
+  color: #1a1a1a;
+  transition: opacity var(--transition-speed);
+}
+
+.feed__retry-btn:hover {
+  opacity: 0.85;
+}
+
+.feed__loading-more {
+  display: flex;
+  justify-content: center;
+  padding: 1.5rem 0;
+}
+
+.feed__sentinel {
+  height: 1px;
+}
+
+/* ===========================
+   Skeleton Loading Cards
+   =========================== */
+
+.feed__skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.problem-card-skeleton {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.problem-card-skeleton__upstars {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 40px;
+}
+
+.problem-card-skeleton__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.problem-card-skeleton__footer {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.25rem;
+}
+
+.skeleton-pulse {
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--color-border) 25%, transparent 50%, var(--color-border) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.skeleton-circle {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+
+.skeleton-line {
+  height: 12px;
+}
+
+.skeleton-line--xs {
+  width: 24px;
+}
+
+.skeleton-line--sm {
+  width: 64px;
+}
+
+.skeleton-line--md {
+  width: 60%;
+}
+
+.skeleton-line--lg {
+  width: 75%;
+  height: 16px;
+}
+
+.skeleton-line--full {
+  width: 100%;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ===========================
+   Responsive
+   =========================== */
+
+@media (max-width: 640px) {
+  .sort-filter-bar {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .problem-card__header {
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+}
