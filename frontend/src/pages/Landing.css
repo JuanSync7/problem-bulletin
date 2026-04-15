@@ -63,6 +63,26 @@
 }
 
 /* ===========================
+   Board Title
+   =========================== */
+
+.landing__board-title {
+  text-align: center;
+  font-size: 2.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  padding-top: 1rem;
+  margin-bottom: 0;
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: none;
+  position: relative;
+  z-index: 8;
+}
+
+/* ===========================
    Bounty Notes — scattered
    =========================== */
 

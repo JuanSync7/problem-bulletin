@@ -62,6 +62,8 @@ export default function Landing() {
   return (
     <div className="landing">
       <div className="landing__board">
+        <h1 className="landing__board-title">Aion Bulletin</h1>
+
         {/* Scattered bounty notes */}
         {BOUNTIES.map((bounty, i) => {
           const pos = POSITIONS[i];
