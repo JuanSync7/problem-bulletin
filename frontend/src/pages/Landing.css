@@ -68,10 +68,11 @@
 
 .landing__board-title {
   text-align: center;
-  font-size: 2.25rem;
-  font-weight: 800;
+  font-size: 3.5rem;
+  font-weight: 900;
   letter-spacing: -0.02em;
-  padding-top: 1rem;
+  padding-top: 1.5rem;
+  padding-bottom: 1rem;
   margin-bottom: 0;
   background: var(--gradient-primary);
   -webkit-background-clip: text;
@@ -79,7 +80,7 @@
   background-clip: text;
   text-shadow: none;
   position: relative;
-  z-index: 8;
+  z-index: 20;
 }
 
 /* ===========================
