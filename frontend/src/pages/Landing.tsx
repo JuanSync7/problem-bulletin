@@ -4,18 +4,11 @@ import { useAuth } from "../hooks/useAuth";
 import { AuthCard } from "../components/AuthCard";
 import "./Landing.css";
 
-// Check if we're in demo mode (no real backend)
-function useIsDemoMode(): boolean | null {
-  const [isDemo, setIsDemo] = useState<boolean | null>(null);
-  useEffect(() => {
-    fetch("/api/health")
-      .then((res) => {
-        const ct = res.headers.get("content-type") || "";
-        setIsDemo(!res.ok || !ct.includes("application/json"));
-      })
-      .catch(() => setIsDemo(true));
-  }, []);
-  return isDemo;
+// Check if we're in demo mode by looking at the hostname
+function useIsDemoMode(): boolean {
+  return window.location.hostname.includes("github.io") ||
+    window.location.hostname.includes("pages.dev") ||
+    window.location.protocol === "file:";
 }
 
 const SAMPLE_PROBLEMS = [
