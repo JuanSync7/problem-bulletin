@@ -114,29 +114,55 @@
   z-index: 1;
 }
 
-/* Pin-drop animation for selected bounties */
-.landing__bounty--animated {
+/* Fly-in animation — cards fly from off-screen and pin onto the board */
+.landing__bounty--fly-left,
+.landing__bounty--fly-right {
   opacity: 0;
-  transform: scale(0.3) rotate(0deg) translateY(-80px);
-  animation: pin-drop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-  animation-delay: var(--pin-delay, 0s);
 }
 
-@keyframes pin-drop {
+.landing__bounty--fly-left {
+  animation: fly-from-left 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  animation-delay: var(--fly-delay, 0s);
+}
+
+.landing__bounty--fly-right {
+  animation: fly-from-right 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  animation-delay: var(--fly-delay, 0s);
+}
+
+@keyframes fly-from-left {
   0% {
     opacity: 0;
-    transform: scale(0.3) translateY(-80px) rotate(0deg);
+    transform: translateX(-110vw) translateY(-40px) rotate(-25deg) scale(0.8);
   }
-  50% {
+  60% {
     opacity: 1;
-    transform: scale(1.1) translateY(5px) rotate(var(--pin-rotate, 0deg));
+    transform: translateX(8px) translateY(2px) rotate(var(--fly-rotate, 0deg)) scale(1.06);
   }
-  70% {
-    transform: scale(0.95) translateY(-2px) rotate(var(--pin-rotate, 0deg));
+  80% {
+    transform: translateX(-3px) translateY(-1px) rotate(var(--fly-rotate, 0deg)) scale(0.97);
   }
   100% {
     opacity: 1;
-    transform: scale(1) translateY(0) rotate(var(--pin-rotate, 0deg));
+    transform: translateX(0) translateY(0) rotate(var(--fly-rotate, 0deg)) scale(1);
+  }
+}
+
+@keyframes fly-from-right {
+  0% {
+    opacity: 0;
+    transform: translateX(110vw) translateY(-40px) rotate(25deg) scale(0.8);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(-8px) translateY(2px) rotate(var(--fly-rotate, 0deg)) scale(1.06);
+  }
+  80% {
+    transform: translateX(3px) translateY(-1px) rotate(var(--fly-rotate, 0deg)) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) translateY(0) rotate(var(--fly-rotate, 0deg)) scale(1);
   }
 }
 

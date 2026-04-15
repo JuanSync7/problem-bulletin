@@ -45,8 +45,15 @@ const POSITIONS = [
   { top: "84%", left: "80%", rotate: 1.2 },
 ];
 
-// Indices of bounties that animate in on page load (0-based)
-const ANIMATED_INDICES = new Set([1, 3, 5, 7, 9]);
+// Bounties that fly in from off-screen on page load
+// "left" = flies in from the left edge, "right" = from the right edge
+const FLY_IN: Record<number, { side: "left" | "right"; order: number }> = {
+  4: { side: "left", order: 0 },   // "Power grid IR drop" — lands left
+  6: { side: "left", order: 1 },   // "Floorplan congestion" — lands left
+  1: { side: "right", order: 2 },  // "DRC violations" — lands right
+  5: { side: "right", order: 3 },  // "Clock tree insertion" — lands right
+  9: { side: "right", order: 4 },  // "SRAM bit-cell stability" — lands right
+};
 
 export default function Landing() {
   const auth = useAuth();
@@ -70,18 +77,18 @@ export default function Landing() {
         {/* Scattered bounty notes */}
         {BOUNTIES.map((bounty, i) => {
           const pos = POSITIONS[i];
-          const isAnimated = ANIMATED_INDICES.has(i);
+          const flyIn = FLY_IN[i];
           return (
             <div
               key={bounty.title}
-              className={`landing__bounty${isAnimated ? " landing__bounty--animated" : ""}`}
+              className={`landing__bounty${flyIn ? ` landing__bounty--fly-${flyIn.side}` : ""}`}
               style={{
                 top: pos.top,
                 left: pos.left,
                 transform: `rotate(${pos.rotate}deg)`,
-                ...(isAnimated ? {
-                  "--pin-delay": `${[...ANIMATED_INDICES].indexOf(i) * 0.35 + 0.3}s`,
-                  "--pin-rotate": `${pos.rotate}deg`,
+                ...(flyIn ? {
+                  "--fly-delay": `${flyIn.order * 0.3 + 0.2}s`,
+                  "--fly-rotate": `${pos.rotate}deg`,
                 } as React.CSSProperties : {}),
               }}
             >
