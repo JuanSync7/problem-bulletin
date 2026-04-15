@@ -45,14 +45,13 @@ const POSITIONS = [
   { top: "84%", left: "80%", rotate: 1.2 },
 ];
 
-// Bounties that fly in from off-screen on page load
-// "left" = flies in from the left edge, "right" = from the right edge
-const FLY_IN: Record<number, { side: "left" | "right"; order: number }> = {
-  4: { side: "left", order: 0 },   // "Power grid IR drop" — lands left
-  6: { side: "left", order: 1 },   // "Floorplan congestion" — lands left
-  1: { side: "right", order: 2 },  // "DRC violations" — lands right
-  5: { side: "right", order: 3 },  // "Clock tree insertion" — lands right
-  9: { side: "right", order: 4 },  // "SRAM bit-cell stability" — lands right
+// Bounties that fly onto the board on page load (2 left-side, 3 right-side)
+const FLY_IN: Record<number, number> = {
+  4: 0,  // "Power grid IR drop" — left side
+  6: 1,  // "Floorplan congestion" — left side
+  1: 2,  // "DRC violations" — right side
+  5: 3,  // "Clock tree insertion" — right side
+  9: 4,  // "SRAM bit-cell stability" — right side
 };
 
 export default function Landing() {
@@ -77,17 +76,18 @@ export default function Landing() {
         {/* Scattered bounty notes */}
         {BOUNTIES.map((bounty, i) => {
           const pos = POSITIONS[i];
-          const flyIn = FLY_IN[i];
+          const flyOrder = FLY_IN[i];
+          const isFlying = flyOrder !== undefined;
           return (
             <div
               key={bounty.title}
-              className={`landing__bounty${flyIn ? ` landing__bounty--fly-${flyIn.side}` : ""}`}
+              className={`landing__bounty${isFlying ? " landing__bounty--fly-in" : ""}`}
               style={{
                 top: pos.top,
                 left: pos.left,
                 transform: `rotate(${pos.rotate}deg)`,
-                ...(flyIn ? {
-                  "--fly-delay": `${flyIn.order * 0.3 + 0.2}s`,
+                ...(isFlying ? {
+                  "--fly-delay": `${flyOrder * 0.3 + 0.2}s`,
                   "--fly-rotate": `${pos.rotate}deg`,
                 } as React.CSSProperties : {}),
               }}
