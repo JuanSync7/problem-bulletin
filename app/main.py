@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import get_settings
@@ -72,23 +76,37 @@ def create_app() -> FastAPI:
         )
 
     # --- Routers --------------------------------------------------------------
-    app.include_router(auth_router)
-    app.include_router(meta_router)
-    app.include_router(problems_router)
-    app.include_router(attachments_router)
-    app.include_router(solutions_router)
-    app.include_router(comments_router)
-    app.include_router(voting_router)
-    app.include_router(watches_router)
-    app.include_router(search_router)
-    app.include_router(leaderboard_router)
-    app.include_router(tags_public_router)
-    app.include_router(notifications_router)
-    app.include_router(ws_router)
-    app.include_router(admin_router)
-    app.include_router(edit_suggestions_router)
-    app.include_router(domains_router)
+    API = "/api"
+    app.include_router(auth_router, prefix=API)
+    app.include_router(meta_router, prefix=API)
+    app.include_router(problems_router, prefix=API)
+    app.include_router(attachments_router, prefix=API)
+    app.include_router(solutions_router, prefix=API)
+    app.include_router(comments_router, prefix=API)
+    app.include_router(voting_router, prefix=API)
+    app.include_router(watches_router, prefix=API)
+    app.include_router(search_router, prefix=API)
+    app.include_router(leaderboard_router, prefix=API)
+    app.include_router(tags_public_router, prefix=API)
+    app.include_router(notifications_router, prefix=API)
+    app.include_router(ws_router, prefix=API)
+    app.include_router(admin_router, prefix=API)
+    app.include_router(edit_suggestions_router, prefix=API)
+    app.include_router(domains_router, prefix=API)
     app.include_router(health_router)
+
+    # --- Serve frontend static files in production ---
+    frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+    if frontend_dist.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(frontend_dist / "assets")), name="static")
+
+        @app.get("/{full_path:path}")
+        async def serve_spa(full_path: str):
+            """Serve the SPA index.html for all non-API routes."""
+            file_path = frontend_dist / full_path
+            if file_path.is_file():
+                return FileResponse(str(file_path))
+            return FileResponse(str(frontend_dist / "index.html"))
 
     return app
 

@@ -29,7 +29,7 @@ function AppFallback() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <ThemeProvider>
         <ToastProvider>
         <MainLayout>

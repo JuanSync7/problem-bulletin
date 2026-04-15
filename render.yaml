@@ -1,0 +1,26 @@
+databases:
+  - name: aion-bulletin-db
+    plan: free
+    databaseName: aion_bulletin
+    user: aion
+
+services:
+  - type: web
+    name: aion-bulletin
+    plan: free
+    runtime: python
+    buildCommand: ./render-build.sh
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: aion-bulletin-db
+          property: connectionURI
+      - key: DEV_AUTH_BYPASS
+        value: "true"
+      - key: ENVIRONMENT
+        value: production
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: NODE_VERSION
+        value: "20"
