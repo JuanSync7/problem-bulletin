@@ -9,7 +9,6 @@ interface LeaderboardEntry {
   userId: string;
   displayName: string;
   score: number;
-  problemCount: number;
 }
 
 const TRACK_LABELS: Record<Track, string> = {
@@ -56,7 +55,13 @@ export default function Leaderboard() {
       }
       const data = await res.json();
       if (!controller.signal.aborted) {
-        setEntries(data.entries ?? data ?? []);
+        const raw: any[] = data.entries ?? data ?? [];
+        setEntries(raw.map((e: any, i: number) => ({
+          rank: e.rank ?? i + 1,
+          userId: e.userId ?? e.user_id ?? "",
+          displayName: e.displayName ?? e.display_name ?? "Unknown",
+          score: e.score ?? e.accepted_count ?? e.upstar_count ?? e.problem_count ?? 0,
+        })));
         setIsLoading(false);
       }
     } catch (err) {
@@ -131,7 +136,6 @@ export default function Leaderboard() {
                 <th>Rank</th>
                 <th>User</th>
                 <th>Score</th>
-                <th>Problems</th>
               </tr>
             </thead>
             <tbody>
@@ -142,7 +146,6 @@ export default function Leaderboard() {
                   </td>
                   <td className="leaderboard__user-name">{entry.displayName}</td>
                   <td className="leaderboard__score">{entry.score}</td>
-                  <td>{entry.problemCount}</td>
                 </tr>
               ))}
             </tbody>

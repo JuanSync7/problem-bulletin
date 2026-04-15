@@ -1,8 +1,22 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { AuthCard } from "../components/AuthCard";
 import "./Landing.css";
+
+// Check if we're in demo mode (no real backend)
+function useIsDemoMode(): boolean | null {
+  const [isDemo, setIsDemo] = useState<boolean | null>(null);
+  useEffect(() => {
+    fetch("/api/health")
+      .then((res) => {
+        const ct = res.headers.get("content-type") || "";
+        setIsDemo(!res.ok || !ct.includes("application/json"));
+      })
+      .catch(() => setIsDemo(true));
+  }, []);
+  return isDemo;
+}
 
 const SAMPLE_PROBLEMS = [
   "Timing closure failure on critical path",
@@ -17,7 +31,7 @@ const SAMPLE_PROBLEMS = [
 
 export default function Landing() {
   const auth = useAuth();
-  const navigate = useNavigate();
+  const isDemo = useIsDemoMode();
   const [enteringDemo, setEnteringDemo] = useState(false);
 
   // Generate random rotation angles once on mount
@@ -25,8 +39,8 @@ export default function Landing() {
     SAMPLE_PROBLEMS.map(() => Math.random() * 8 - 4),
   );
 
-  // Redirect if authenticated (real backend)
-  if (!auth.isLoading && auth.isAuthenticated && !enteringDemo) {
+  // Only auto-redirect if real backend and authenticated (not demo)
+  if (!auth.isLoading && auth.isAuthenticated && isDemo === false) {
     return <Navigate to="/problems" replace />;
   }
 
