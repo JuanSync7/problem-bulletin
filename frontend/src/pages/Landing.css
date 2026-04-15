@@ -309,6 +309,25 @@
    Tagline
    =========================== */
 
+.landing__demo-btn {
+  margin-top: 1rem;
+  padding: 0.75rem 2rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 700;
+  background: var(--gradient-primary);
+  color: #1a1a1a;
+  border: none;
+  cursor: pointer;
+  transition: opacity var(--transition-speed), transform var(--transition-speed);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.landing__demo-btn:hover {
+  opacity: 0.9;
+  transform: scale(1.03);
+}
+
 .landing__tagline {
   margin-top: 1.25rem;
   font-size: 1.0625rem;

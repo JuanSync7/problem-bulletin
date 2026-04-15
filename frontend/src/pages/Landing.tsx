@@ -1,30 +1,36 @@
-import React, { useState, useMemo } from "react";
-import { Navigate } from "react-router-dom";
+import React, { useState } from "react";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { AuthCard } from "../components/AuthCard";
 import "./Landing.css";
 
 const SAMPLE_PROBLEMS = [
-  "Build log parsing too slow",
-  "Test coverage gaps in auth module",
-  "Deployment rollbacks take 30+ minutes",
-  "Flaky integration tests in CI",
-  "On-call alert fatigue",
-  "Onboarding docs are outdated",
-  "Cross-team dependency bottlenecks",
-  "Incident postmortems rarely actioned",
+  "Timing closure failure on critical path",
+  "DRC violations in metal fill",
+  "Scan chain reorder causing coverage drop",
+  "UVM scoreboard mismatch on AXI burst",
+  "Power grid IR drop exceeding target",
+  "Clock tree insertion delay too high",
+  "Floorplan congestion near IO ring",
+  "Hold violations after CTS",
 ];
 
 export default function Landing() {
   const auth = useAuth();
+  const navigate = useNavigate();
+  const [enteringDemo, setEnteringDemo] = useState(false);
 
   // Generate random rotation angles once on mount
   const [rotations] = useState(() =>
     SAMPLE_PROBLEMS.map(() => Math.random() * 8 - 4),
   );
 
-  // Redirect if already authenticated
-  if (!auth.isLoading && auth.isAuthenticated) {
+  // Redirect if authenticated (real backend)
+  if (!auth.isLoading && auth.isAuthenticated && !enteringDemo) {
+    return <Navigate to="/problems" replace />;
+  }
+
+  if (enteringDemo) {
     return <Navigate to="/problems" replace />;
   }
 
@@ -52,8 +58,14 @@ export default function Landing() {
           onMagicLink={auth.loginWithMagicLink}
           onClearError={auth.clearError}
         />
+        <button
+          className="landing__demo-btn"
+          onClick={() => setEnteringDemo(true)}
+        >
+          Enter Demo
+        </button>
         <p className="landing__tagline">
-          Crowd-source solutions to workplace problems
+          Crowd-source solutions to engineering problems
         </p>
       </div>
     </div>
