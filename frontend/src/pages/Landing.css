@@ -83,6 +83,16 @@
   z-index: 20;
 }
 
+.landing__board-title::after {
+  content: "";
+  display: block;
+  width: 60%;
+  height: 4px;
+  margin: 0.5rem auto 0;
+  border-radius: 2px;
+  background: var(--gradient-primary);
+}
+
 /* ===========================
    Bounty Notes — scattered
    =========================== */
