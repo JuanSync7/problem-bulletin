@@ -11,10 +11,11 @@ const MOCK_USERS = [
 ];
 
 const MOCK_CATEGORIES = [
-  { id: "c1", name: "Bug", slug: "bug" },
-  { id: "c2", name: "Performance", slug: "performance" },
-  { id: "c3", name: "Design", slug: "design" },
-  { id: "c4", name: "Documentation", slug: "documentation" },
+  { id: "c1", name: "Engineering", slug: "engineering", sort_order: 0 },
+  { id: "c2", name: "Infrastructure", slug: "infrastructure", sort_order: 1 },
+  { id: "c3", name: "Process", slug: "process", sort_order: 2 },
+  { id: "c4", name: "Tooling", slug: "tooling", sort_order: 3 },
+  { id: "c5", name: "Documentation", slug: "documentation", sort_order: 4 },
 ];
 
 const MOCK_DOMAINS = [
@@ -37,7 +38,7 @@ export const MOCK_PROBLEMS = [
     title: "Timing closure failure on critical path in ALU",
     description: "The ALU critical path is failing timing at 1.2GHz target. Setup slack is -0.15ns on the carry chain. We've tried retiming but the logic depth is fundamentally too deep.\n\n---\n\n**Impact:** Blocks tapeout schedule by 2 weeks if not resolved.\n\n**What we've tried:**\n- Gate sizing on carry chain\n- Retiming across pipeline stages\n- Alternative adder architectures (Kogge-Stone vs Brent-Kung)",
     status: "open",
-    category: MOCK_CATEGORIES[1],
+    category: MOCK_CATEGORIES[0],
     domain: MOCK_DOMAINS[3],
     tags: [{ id: "t1", name: "timing" }, { id: "t2", name: "P0" }],
     upstar_count: 12,
@@ -57,7 +58,7 @@ export const MOCK_PROBLEMS = [
     title: "DRC violations in metal fill around analog block",
     description: "Metal fill generation is producing DRC violations at the boundary of the analog block. The fill exclusion zone isn't being respected by the automated fill tool.\n\nSpecifically seeing M4/M5 density violations within 2um of the analog keep-out region.",
     status: "claimed",
-    category: MOCK_CATEGORIES[0],
+    category: MOCK_CATEGORIES[3],
     domain: MOCK_DOMAINS[3],
     tags: [{ id: "t3", name: "DRC" }, { id: "t4", name: "analog" }],
     upstar_count: 8,
@@ -77,7 +78,7 @@ export const MOCK_PROBLEMS = [
     title: "Scan chain reorder causing coverage drop",
     description: "After the latest scan chain reorder for ATPG optimization, stuck-at coverage dropped from 98.2% to 94.7%. The reorder was supposed to improve pattern count but seems to have introduced hard-to-detect faults.\n\nNeed to analyze which faults became undetectable.",
     status: "open",
-    category: MOCK_CATEGORIES[0],
+    category: MOCK_CATEGORIES[2],
     domain: MOCK_DOMAINS[1],
     tags: [{ id: "t5", name: "DFT" }, { id: "t6", name: "ATPG" }],
     upstar_count: 5,

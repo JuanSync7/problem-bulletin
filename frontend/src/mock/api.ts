@@ -94,6 +94,7 @@ function matchRoute(url: string, method: string): RouteMatch | null {
     [/^\/api\/problems\/([^/]+)$/, "problem_detail"],
     [/^\/api\/problems$/, "problems_list"],
     [/^\/api\/categories$/, "categories"],
+    [/^\/api\/admin\/categories$/, "categories"],
     [/^\/api\/domains$/, "domains"],
     [/^\/api\/leaderboard$/, "leaderboard"],
     [/^\/api\/search$/, "search"],
