@@ -114,31 +114,34 @@
   z-index: 1;
 }
 
-/* Fly-in animation — cards fly from above the screen onto the board like being pinned */
+/* Fly-in animation — cards fly from the viewer's perspective onto the board (z-depth) */
 .landing__bounty--fly-in {
   opacity: 0;
-  animation: fly-to-board 0.6s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  animation: pin-to-board 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
   animation-delay: var(--fly-delay, 0s);
 }
 
-@keyframes fly-to-board {
+@keyframes pin-to-board {
   0% {
     opacity: 0;
-    transform: translateY(-120vh) rotate(0deg) scale(0.6);
+    transform: scale(2.8) rotate(0deg);
+    filter: blur(4px);
   }
-  55% {
+  40% {
     opacity: 1;
-    transform: translateY(6px) rotate(var(--fly-rotate, 0deg)) scale(1.08);
+    filter: blur(0.5px);
   }
-  75% {
-    transform: translateY(-3px) rotate(var(--fly-rotate, 0deg)) scale(0.97);
+  65% {
+    transform: scale(0.92) rotate(var(--fly-rotate, 0deg));
+    filter: blur(0);
   }
-  90% {
-    transform: translateY(1px) rotate(var(--fly-rotate, 0deg)) scale(1.01);
+  82% {
+    transform: scale(1.04) rotate(var(--fly-rotate, 0deg));
   }
   100% {
     opacity: 1;
-    transform: translateY(0) rotate(var(--fly-rotate, 0deg)) scale(1);
+    transform: scale(1) rotate(var(--fly-rotate, 0deg));
+    filter: blur(0);
   }
 }
 
