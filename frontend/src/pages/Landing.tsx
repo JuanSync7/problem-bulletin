@@ -34,10 +34,10 @@ const BOUNTIES: BountyNote[] = [
 // Pre-computed scattered positions so they don't shift on re-render
 const POSITIONS = [
   { top: "10%", left: "0%", rotate: -4.5 },
-  { top: "18%", left: "82%", rotate: 2.5 },
+  { top: "8%", left: "82%", rotate: 2.5 },
   { top: "26%", left: "12%", rotate: 1.8 },
-  { top: "22%", left: "68%", rotate: -3.2 },
-  { top: "42%", left: "-1%", rotate: -1.5 },
+  { top: "22%", left: "75%", rotate: -3.2 },
+  { top: "42%", left: "-4%", rotate: -1.5 },
   { top: "50%", left: "84%", rotate: 4 },
   { top: "60%", left: "5%", rotate: 3.2 },
   { top: "68%", left: "74%", rotate: -2 },
@@ -99,6 +99,7 @@ export default function Landing() {
           <AuthCard
             isLoading={auth.isLoading}
             error={auth.error}
+            isDemo={isDemo}
             onMicrosoftLogin={auth.login}
             onMagicLink={auth.loginWithMagicLink}
             onClearError={auth.clearError}

@@ -3,6 +3,7 @@ import React, { useState } from "react";
 interface AuthCardProps {
   isLoading: boolean;
   error: string | null;
+  isDemo?: boolean;
   onMicrosoftLogin: () => void;
   onMagicLink: (email: string) => Promise<boolean>;
   onClearError: () => void;
@@ -13,6 +14,7 @@ type Tab = "microsoft" | "magic";
 export function AuthCard({
   isLoading,
   error,
+  isDemo = false,
   onMicrosoftLogin,
   onMagicLink,
   onClearError,
@@ -64,7 +66,7 @@ export function AuthCard({
               type="button"
               className="auth-card__ms-btn"
               onClick={onMicrosoftLogin}
-              disabled={isLoading}
+              disabled={isLoading || isDemo}
             >
               {isLoading ? (
                 <span className="auth-card__spinner" />
@@ -105,13 +107,13 @@ export function AuthCard({
                     placeholder="you@company.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    disabled={isLoading}
+                    disabled={isLoading || isDemo}
                     autoComplete="email"
                   />
                   <button
                     type="submit"
                     className="auth-card__submit-btn"
-                    disabled={isLoading || !email.trim()}
+                    disabled={isLoading || isDemo || !email.trim()}
                   >
                     {isLoading ? <span className="auth-card__spinner" /> : null}
                     Send Magic Link
