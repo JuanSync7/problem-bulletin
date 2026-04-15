@@ -33,16 +33,16 @@ const BOUNTIES: BountyNote[] = [
 
 // Pre-computed scattered positions so they don't shift on re-render
 const POSITIONS = [
-  { top: "11%", left: "3%", rotate: -4.5 },
-  { top: "16%", left: "72%", rotate: 2.5 },
-  { top: "28%", left: "8%", rotate: 1.8 },
-  { top: "25%", left: "80%", rotate: -3.2 },
-  { top: "44%", left: "1%", rotate: -1.5 },
-  { top: "53%", left: "73%", rotate: 4 },
-  { top: "62%", left: "6%", rotate: 3.2 },
-  { top: "70%", left: "77%", rotate: -2 },
-  { top: "80%", left: "0%", rotate: -5 },
-  { top: "85%", left: "69%", rotate: 1.2 },
+  { top: "10%", left: "0%", rotate: -4.5 },
+  { top: "18%", left: "82%", rotate: 2.5 },
+  { top: "26%", left: "12%", rotate: 1.8 },
+  { top: "22%", left: "68%", rotate: -3.2 },
+  { top: "42%", left: "-1%", rotate: -1.5 },
+  { top: "50%", left: "84%", rotate: 4 },
+  { top: "60%", left: "5%", rotate: 3.2 },
+  { top: "68%", left: "74%", rotate: -2 },
+  { top: "78%", left: "-2%", rotate: -5 },
+  { top: "84%", left: "80%", rotate: 1.2 },
 ];
 
 export default function Landing() {
