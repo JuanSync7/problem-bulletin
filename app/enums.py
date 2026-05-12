@@ -43,3 +43,44 @@ class ParentType(str, Enum):             # REQ-258
     problem  = "problem"
     solution = "solution"
     comment  = "comment"
+
+
+# --- Agent-Kanban enums (Task A6) -------------------------------------------
+
+class TicketType(str, Enum):
+    epic    = "epic"
+    story   = "story"
+    task    = "task"
+    subtask = "subtask"
+    bug     = "bug"
+
+
+class TicketPriority(str, Enum):
+    lowest  = "lowest"
+    low     = "low"
+    medium  = "medium"
+    high    = "high"
+    highest = "highest"
+
+
+class TicketStatus(str, Enum):
+    todo        = "todo"
+    in_progress = "in_progress"
+    in_review   = "in_review"
+    blocked     = "blocked"
+    done        = "done"
+    cancelled   = "cancelled"
+
+
+class TicketLinkType(str, Enum):
+    blocks     = "blocks"
+    relates    = "relates"
+    duplicates = "duplicates"
+
+
+class ActorType(str, Enum):
+    user  = "user"
+    agent = "agent"
+
+
+TERMINAL_STATUSES = frozenset({TicketStatus.done, TicketStatus.cancelled})
