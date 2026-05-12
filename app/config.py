@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     BASE_URL: AnyHttpUrl = "http://localhost:8000"  # REQ-104
     TEAMS_WEBHOOK_URL: AnyHttpUrl | None = None
 
+    # --- Agent-Kanban observability (Task C4) ---
+    OTEL_EXPORTER_OTLP_ENDPOINT: str = ""  # NFR-906; empty disables OTel export
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()

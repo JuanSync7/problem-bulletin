@@ -29,5 +29,15 @@ services:
       timeout: 3s
       retries: 5
 
+  jaeger:
+    # Task C4: local OTel collector + UI. App connects via OTEL_EXPORTER_OTLP_ENDPOINT.
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "4317:4317"    # OTLP gRPC (app -> collector)
+      - "4318:4318"    # OTLP HTTP
+      - "16686:16686"  # Jaeger UI
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+
 volumes:
   pgdata_dev:

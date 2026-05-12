@@ -201,6 +201,18 @@ class TestExtraIgnore:
 # get_settings() LRU cache
 # ---------------------------------------------------------------------------
 
+class TestOtelEndpoint:
+    def test_otel_endpoint_loaded_from_env(self):
+        """Task C4 — NFR-906: OTEL_EXPORTER_OTLP_ENDPOINT is read from env."""
+        settings = _make_settings(OTEL_EXPORTER_OTLP_ENDPOINT="http://jaeger:4317")
+        assert settings.OTEL_EXPORTER_OTLP_ENDPOINT == "http://jaeger:4317"
+
+    def test_otel_endpoint_default_is_empty(self):
+        """Task C4 — empty default means OTel export is disabled out of the box."""
+        settings = _make_settings()
+        assert settings.OTEL_EXPORTER_OTLP_ENDPOINT == ""
+
+
 class TestGetSettingsCache:
     def test_two_calls_return_same_instance(self):
         """REQ: get_settings() returns the same cached instance on repeated calls."""
