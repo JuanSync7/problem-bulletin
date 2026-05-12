@@ -12,7 +12,7 @@ class Notification(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
     recipient_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     type = Column(String, nullable=False)
-    problem_id = Column(UUID(as_uuid=True), ForeignKey("problems.id"), nullable=True)
+    problem_id = Column(UUID(as_uuid=True), ForeignKey("tickets.id"), nullable=True)
     solution_id = Column(UUID(as_uuid=True), ForeignKey("solutions.id"), nullable=True)
     actor_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     is_read = Column(Boolean, nullable=False, default=False, server_default=text("false"))

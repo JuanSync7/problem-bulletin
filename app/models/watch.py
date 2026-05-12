@@ -12,7 +12,7 @@ class Watch(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     problem_id = Column(
-        UUID(as_uuid=True), ForeignKey("problems.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False
     )
     level = Column(
         String,

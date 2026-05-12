@@ -46,7 +46,7 @@ class ProblemTag(Base):
 
     problem_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("problems.id", ondelete="CASCADE"),
+        ForeignKey("tickets.id", ondelete="CASCADE"),
         primary_key=True,
     )
     tag_id = Column(
@@ -57,14 +57,19 @@ class ProblemTag(Base):
 
 
 class Problem(Base):
-    __tablename__ = "problems"
+    # Legacy alias — `problems` was renamed to `tickets` in migration a1_agent_kanban.
+    # Kept for backward compatibility with existing routes/services.
+    __tablename__ = "tickets"
 
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
     seq_number = Column(Integer, unique=True, nullable=True, index=True)
     title = Column(String, nullable=False)
     description = Column(Text, nullable=False)
     author_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    # The legacy `status` column was renamed to `legacy_status` in a1_agent_kanban
+    # to make room for the new enum-typed `status` column on the ticket model.
     status = Column(
+        "legacy_status",
         String,
         nullable=False,
         default=ProblemStatus.open,
@@ -112,7 +117,7 @@ class ProblemEditHistory(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
     problem_id = Column(
-        UUID(as_uuid=True), ForeignKey("problems.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False
     )
     editor_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     snapshot = Column(JSONB, nullable=False)
@@ -127,7 +132,7 @@ class Claim(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
     problem_id = Column(
-        UUID(as_uuid=True), ForeignKey("problems.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False
     )
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     claimed_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -148,7 +153,7 @@ class Upstar(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     problem_id = Column(
-        UUID(as_uuid=True), ForeignKey("problems.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False
     )
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
