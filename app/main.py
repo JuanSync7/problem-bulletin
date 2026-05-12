@@ -40,6 +40,11 @@ from app.routes.ws import router as ws_router
 from app.routes.health import router as health_router
 from app.routes.edit_suggestions import router as edit_suggestions_router
 from app.routes.domains import router as domains_router
+from app.routes.tickets import (
+    router as tickets_router,
+    EXCEPTION_HANDLERS as _TICKET_EXC_HANDLERS,
+)
+from app.routes.admin.agent_accounts import router as agent_accounts_admin_router
 
 _EXCEPTION_STATUS_MAP: dict[type[AppError], int] = {
     ForbiddenTransitionError: 409,
@@ -93,7 +98,20 @@ def create_app() -> FastAPI:
     app.include_router(admin_router, prefix=API)
     app.include_router(edit_suggestions_router, prefix=API)
     app.include_router(domains_router, prefix=API)
+    app.include_router(tickets_router, prefix=API)
+    app.include_router(agent_accounts_admin_router, prefix=API)
     app.include_router(health_router)
+
+    # --- Agent-kanban domain exception handlers ------------------------------
+    for exc_cls, handler in _TICKET_EXC_HANDLERS.items():
+        app.add_exception_handler(exc_cls, handler)
+
+    # --- MCP server mount (HTTP-SSE) -----------------------------------------
+    try:
+        from app.mcp_server.server import build_mcp_app
+        app.mount("/mcp", build_mcp_app())
+    except Exception:  # pragma: no cover - mount best-effort if MCP SDK missing
+        pass
 
     # --- Serve frontend static files in production ---
     frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
