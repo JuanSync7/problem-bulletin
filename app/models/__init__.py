@@ -23,3 +23,10 @@ from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.app_config import AppConfig  # noqa: F401
 from app.models.edit_suggestion import EditSuggestion  # noqa: F401
 from app.models.domain import Domain  # noqa: F401
+
+# --- Agent-Kanban (Task A5) ---
+from app.models.ticket import Ticket  # noqa: F401
+from app.models.ticket_transition import TicketTransition  # noqa: F401
+from app.models.ticket_link import TicketLink  # noqa: F401
+from app.models.agent_account import AgentAccount  # noqa: F401
+from app.models.audit_log_event import AuditLogEvent  # noqa: F401
