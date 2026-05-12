@@ -12,9 +12,9 @@ stages:
     verdict: APPROVE
     iterations: 1
   spec:
-    status: pending
-    output: null
-    verdict: null
+    status: completed
+    output: "docs/AGENT_KANBAN/01_SPEC.md"
+    verdict: APPROVE
     iterations: 0
   spec_summary:
     status: pending
