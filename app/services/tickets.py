@@ -58,6 +58,7 @@ from app.models.ticket import Ticket
 from app.models.ticket_comment import TicketComment
 from app.models.ticket_link import TicketLink
 from app.models.ticket_transition import TicketTransition
+from app.observability.tracing import traced
 from app.services.audit import AuditService
 from app.services.context import Actor
 
@@ -149,6 +150,7 @@ class TicketService:
 
     # -- S2: create / get / list -------------------------------------------
 
+    @traced(action="create")
     async def create(
         self,
         session: AsyncSession,
@@ -296,6 +298,7 @@ class TicketService:
 
     # -- S3: OCC update -----------------------------------------------------
 
+    @traced(action="update")
     async def update(
         self,
         session: AsyncSession,
@@ -358,6 +361,7 @@ class TicketService:
 
     # -- S4: transition (status machine + row lock) ------------------------
 
+    @traced(action="transition")
     async def transition(
         self,
         session: AsyncSession,
@@ -435,6 +439,7 @@ class TicketService:
 
     # -- S5: assign + claim ------------------------------------------------
 
+    @traced(action="assign")
     async def assign(
         self,
         session: AsyncSession,
@@ -480,6 +485,7 @@ class TicketService:
         )
         return ticket
 
+    @traced(action="claim")
     async def claim(
         self,
         session: AsyncSession,
@@ -564,6 +570,7 @@ class TicketService:
 
     # -- S6: add_comment + link --------------------------------------------
 
+    @traced(action="add_comment")
     async def add_comment(
         self,
         session: AsyncSession,
