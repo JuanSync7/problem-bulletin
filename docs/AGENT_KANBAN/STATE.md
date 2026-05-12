@@ -14,6 +14,7 @@
 - `06_TEST_DOCS.md`
 - `07_TEST_COVERAGE.md` (75 ACs mapped)
 - `08_BUILD_PLAN.md`
+- `09_ENGINEERING_GUIDE.md` (post-implementation reference, written 2026-05-12)
 
 ## Phase A/B/C status
 All planned phases (migrations, models, services, REST routes, MCP server,
@@ -107,6 +108,16 @@ python scripts/agent_demo.py    # another terminal
 # - Kanban board:  http://localhost:5173/board  (or :8000/board prod)
 # - Activity feed: same page, updates live via /api/ws
 ```
+
+## Drift between planning docs and shipped code
+
+The design (`04_DESIGN.md`) and implementation (`05_IMPLEMENTATION.md`)
+docs were written before scope was trimmed; they still reference a
+`projects` table, per-project key prefixes, `board_columns`, and
+per-project WS subscriptions. None of that shipped — the build chose a
+single-tenant model with global `TKT-N` keys and unfiltered WS fan-out.
+The engineering guide (`09_ENGINEERING_GUIDE.md`) is the source of truth
+for what was actually built; treat planning docs as historical intent.
 
 ## Known issues
 
