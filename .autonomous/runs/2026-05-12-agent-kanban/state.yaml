@@ -27,35 +27,35 @@ stages:
     verdict: APPROVE
     iterations: 1
   architecture:
-    status: pending
-    output: null
-    verdict: null
-    iterations: 0
+    status: completed
+    output: "docs/AGENT_KANBAN/03_ARCHITECTURE.md"
+    verdict: APPROVE
+    iterations: 1
   design:
-    status: pending
-    output: null
-    verdict: null
-    iterations: 0
+    status: completed
+    output: "docs/AGENT_KANBAN/04_DESIGN.md"
+    verdict: APPROVE
+    iterations: 1
   implementation_docs:
-    status: pending
-    output: null
-    verdict: null
-    iterations: 0
+    status: completed
+    output: "docs/AGENT_KANBAN/05_IMPLEMENTATION.md"
+    verdict: APPROVE
+    iterations: 1
   test_docs:
-    status: pending
-    output: null
-    verdict: null
-    iterations: 0
+    status: completed
+    output: "docs/AGENT_KANBAN/06_TEST_DOCS.md"
+    verdict: APPROVE
+    iterations: 1
   test_coverage:
-    status: pending
-    output: null
-    verdict: null
-    iterations: 0
+    status: completed
+    output: "docs/AGENT_KANBAN/07_TEST_COVERAGE.md"
+    verdict: APPROVE
+    iterations: 1
   build_plan:
-    status: pending
-    output: null
-    verdict: null
-    iterations: 0
+    status: completed
+    output: "docs/AGENT_KANBAN/08_BUILD_PLAN.md"
+    verdict: APPROVE
+    iterations: 1
   execute:
     status: pending
     output: null
