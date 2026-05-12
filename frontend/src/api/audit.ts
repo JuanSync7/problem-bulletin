@@ -1,0 +1,62 @@
+/**
+ * Audit / agent-activity REST client.
+ *
+ * The backend exposes a filtered projection of the audit_log at
+ * ``/api/agents/activity`` (Phase B3). The endpoint may not yet be deployed in
+ * every environment, so the client tolerates a 404 by returning an empty list
+ * instead of throwing — the activity panel will then simply show "no recent
+ * activity" until the backend ships.
+ */
+import { ApiError } from "./tickets";
+
+export interface ActivityEntry {
+  id: string;
+  occurred_at: string;
+  actor_id: string;
+  actor_type: string;
+  actor_name?: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  ticket_key?: string | null;
+  correlation_id?: string | null;
+  details?: Record<string, unknown> | null;
+}
+
+export interface ListActivityParams {
+  project_id?: string;
+  actor_type?: "agent" | "user";
+  limit?: number;
+}
+
+export async function listAgentActivity(
+  params: ListActivityParams = {},
+): Promise<ActivityEntry[]> {
+  const usp = new URLSearchParams();
+  if (params.project_id) usp.set("project_id", params.project_id);
+  if (params.actor_type) usp.set("actor_type", params.actor_type);
+  usp.set("limit", String(params.limit ?? 50));
+  try {
+    const res = await fetch(`/api/agents/activity?${usp.toString()}`, {
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    });
+    if (res.status === 404) return [];
+    if (!res.ok) {
+      let env = null;
+      try {
+        env = (await res.json())?.error ?? null;
+      } catch {
+        /* ignore */
+      }
+      throw new ApiError(res.status, env);
+    }
+    const body = await res.json();
+    // accept either {items:[...]} or a bare array
+    if (Array.isArray(body)) return body as ActivityEntry[];
+    return (body?.items ?? []) as ActivityEntry[];
+  } catch (e) {
+    if (e instanceof ApiError) throw e;
+    return [];
+  }
+}
