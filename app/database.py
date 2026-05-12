@@ -23,10 +23,16 @@ class Base(DeclarativeBase):
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    # Local import to avoid a circular dep on app.events (which has none here,
+    # but keep this defensive — events imports nothing from app).
+    from app.events import flush_session_events, discard_session_events
+
     async with async_session_factory() as session:
         try:
             yield session
             await session.commit()
+            flush_session_events(session)
         except Exception:
             await session.rollback()
+            discard_session_events(session)
             raise

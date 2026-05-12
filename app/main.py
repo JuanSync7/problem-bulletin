@@ -39,6 +39,7 @@ from app.routes.leaderboard import router as leaderboard_router
 from app.routes.watches import router as watches_router
 from app.routes.notifications import router as notifications_router
 from app.routes.ws import router as ws_router
+from app.routes.ws_tickets import router as ws_tickets_router
 from app.routes.health import router as health_router
 from app.routes.edit_suggestions import router as edit_suggestions_router
 from app.routes.domains import router as domains_router
@@ -108,6 +109,7 @@ def create_app() -> FastAPI:
     app.include_router(tags_public_router, prefix=API)
     app.include_router(notifications_router, prefix=API)
     app.include_router(ws_router, prefix=API)
+    app.include_router(ws_tickets_router, prefix=API)
     app.include_router(admin_router, prefix=API)
     app.include_router(edit_suggestions_router, prefix=API)
     app.include_router(domains_router, prefix=API)

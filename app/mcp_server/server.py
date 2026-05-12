@@ -90,12 +90,17 @@ def _build_mcp_server() -> Server:
                     correlation_id=correlation_id,
                     **(arguments or {}),
                 )
+                from app.events import flush_session_events, discard_session_events
                 if isinstance(result, dict) and "error" in result:
                     await session.rollback()
+                    discard_session_events(session)
                 else:
                     await session.commit()
+                    flush_session_events(session)
             except Exception as exc:  # noqa: BLE001 - uniform translation
                 await session.rollback()
+                from app.events import discard_session_events
+                discard_session_events(session)
                 result = map_exception_to_jsonrpc(exc, correlation_id=correlation_id)
         return [mcp_types.TextContent(type="text", text=json.dumps(result, default=str))]
 

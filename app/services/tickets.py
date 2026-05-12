@@ -45,6 +45,7 @@ from app.enums import (
     TicketStatus,
     TicketType,
 )
+from app.events import stage_event
 from app.exceptions import (
     AlreadyClaimedError,
     DuplicateLinkError,
@@ -242,6 +243,17 @@ class TicketService:
             diff={"before": None, "after": ticket.to_dict()},
             correlation_id=correlation_id,
         )
+        stage_event(
+            session,
+            "ticket.created",
+            ticket_id=ticket.id,
+            correlation_id=correlation_id,
+            payload={
+                "ticket": ticket.to_dict(),
+                "actor": {"id": str(actor.id), "type": _actor_type_str(actor), "name": actor.label},
+                "ticket_key": ticket.key,
+            },
+        )
         return ticket
 
     async def get(
@@ -357,6 +369,18 @@ class TicketService:
             diff={"before": before, "after": ticket.to_dict()},
             correlation_id=correlation_id,
         )
+        stage_event(
+            session,
+            "ticket.updated",
+            ticket_id=ticket.id,
+            correlation_id=correlation_id,
+            payload={
+                "ticket_key": ticket.key,
+                "actor": {"id": str(actor.id), "type": _actor_type_str(actor), "name": actor.label},
+                "patch": {k: str(v) for k, v in patch.items()},
+                "version": ticket.version,
+            },
+        )
         return ticket
 
     # -- S4: transition (status machine + row lock) ------------------------
@@ -435,6 +459,20 @@ class TicketService:
             },
             correlation_id=correlation_id,
         )
+        stage_event(
+            session,
+            "ticket.transitioned",
+            ticket_id=ticket.id,
+            correlation_id=correlation_id,
+            payload={
+                "ticket_key": ticket.key,
+                "from_status": current.value,
+                "to_status": target.value,
+                "reason": reason,
+                "actor": {"id": str(actor.id), "type": _actor_type_str(actor), "name": actor.label},
+                "version": ticket.version,
+            },
+        )
         return ticket
 
     # -- S5: assign + claim ------------------------------------------------
@@ -482,6 +520,19 @@ class TicketService:
             actor=actor,
             diff={"before": before, "after": ticket.to_dict()},
             correlation_id=correlation_id,
+        )
+        stage_event(
+            session,
+            "ticket.assigned",
+            ticket_id=ticket.id,
+            correlation_id=correlation_id,
+            payload={
+                "ticket_key": ticket.key,
+                "assignee_id": str(assignee_id) if assignee_id else None,
+                "assignee_type": assignee_type,
+                "actor": {"id": str(actor.id), "type": _actor_type_str(actor), "name": actor.label},
+                "version": ticket.version,
+            },
         )
         return ticket
 
@@ -566,6 +617,17 @@ class TicketService:
             diff={"after": ticket.to_dict()},
             correlation_id=correlation_id,
         )
+        stage_event(
+            session,
+            "ticket.claimed",
+            ticket_id=ticket.id,
+            correlation_id=correlation_id,
+            payload={
+                "ticket_key": ticket.key,
+                "actor": {"id": str(actor.id), "type": _actor_type_str(actor), "name": actor.label},
+                "version": ticket.version,
+            },
+        )
         return ticket
 
     # -- S6: add_comment + link --------------------------------------------
@@ -604,6 +666,18 @@ class TicketService:
             actor=actor,
             diff={"after": {"ticket_id": str(ticket.id), "body": body}},
             correlation_id=correlation_id,
+        )
+        stage_event(
+            session,
+            "ticket.commented",
+            ticket_id=ticket.id,
+            correlation_id=correlation_id,
+            payload={
+                "ticket_key": ticket.key,
+                "comment_id": str(comment.id),
+                "actor": {"id": str(actor.id), "type": _actor_type_str(actor), "name": actor.label},
+                "body": body,
+            },
         )
         return comment
 
@@ -662,6 +736,18 @@ class TicketService:
                 }
             },
             correlation_id=correlation_id,
+        )
+        stage_event(
+            session,
+            "ticket.linked",
+            ticket_id=source_id,
+            correlation_id=correlation_id,
+            payload={
+                "source_id": str(source_id),
+                "target_id": str(target_id),
+                "link_type": lt.value,
+                "actor": {"id": str(actor.id), "type": _actor_type_str(actor), "name": actor.label},
+            },
         )
         return row
 
