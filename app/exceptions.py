@@ -122,3 +122,29 @@ class RateLimitedError(AppError):
     def __init__(self, retry_after_ms: int):
         self.retry_after_ms = int(retry_after_ms)
         super().__init__(f"Rate limited; retry after {retry_after_ms}ms")
+
+
+# Aliases / additions used by the service layer (S1-S8) -----------------------
+
+class TicketNotFoundError(NotFoundError):
+    def __init__(self, ident):
+        self.ident = ident
+        super().__init__(f"Ticket not found: {ident!s}")
+
+
+# OptimisticConcurrencyError is the canonical name used by the service layer.
+# StaleVersionError remains for back-compat with earlier docs.
+OptimisticConcurrencyError = StaleVersionError
+
+
+# DuplicateLinkError is the canonical name used by the service layer.
+DuplicateLinkError = LinkExistsError
+
+
+class ScopeDeniedError(ForbiddenError):
+    """Agent token authenticated but lacks the required scope."""
+
+    def __init__(self, required: str):
+        self.required = required
+        super().__init__(f"Scope denied: {required!r}")
+

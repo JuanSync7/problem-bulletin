@@ -17,6 +17,8 @@ dependencies = [
     "httpx",
     "python-multipart",
     "pillow",
+    "argon2-cffi",
+    "itsdangerous",
 ]
 
 [project.optional-dependencies]
