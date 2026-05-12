@@ -19,6 +19,7 @@ interface NavItem {
 const mainNavItems: NavItem[] = [
   { label: "Home", to: "/" },
   { label: "Problems", to: "/problems" },
+  { label: "Kanban Board", to: "/board" },
   { label: "Submit", to: "/submit" },
   { label: "Search", to: "/search" },
   { label: "AI Search", to: "/ai-search" },

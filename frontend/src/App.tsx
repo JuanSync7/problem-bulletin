@@ -17,6 +17,7 @@ const AdminCategories = lazy(() => import("./pages/admin/Categories"));
 const AdminTags = lazy(() => import("./pages/admin/Tags"));
 const AdminUsers = lazy(() => import("./pages/admin/Users"));
 const AdminModeration = lazy(() => import("./pages/admin/Moderation"));
+const KanbanBoardPage = lazy(() => import("./pages/Kanban"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 function AppFallback() {
@@ -48,6 +49,7 @@ export default function App() {
               <Route path="/admin/tags" element={<AdminTags />} />
               <Route path="/admin/users" element={<AdminUsers />} />
               <Route path="/admin/moderation" element={<AdminModeration />} />
+              <Route path="/board" element={<KanbanBoardPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
