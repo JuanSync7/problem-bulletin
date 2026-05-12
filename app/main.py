@@ -21,8 +21,10 @@ from app.exceptions import (
     PinLimitExceededError,
     TenantMismatchError,
 )
+from app.middleware.correlation import CorrelationIdMiddleware
 from app.middleware.logging import LoggingMiddleware
 from app.middleware.security import SecurityHeadersMiddleware
+from app.observability import setup_json_logging, setup_otel
 from app.routes.admin import admin_router
 from app.routes.admin.tags import public_router as tags_public_router
 from app.routes.attachments import router as attachments_router
@@ -63,13 +65,24 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title=settings.APP_NAME)
 
-    # --- Middleware (order matters — outermost first) --------------------------
+    # --- Logging + OpenTelemetry (Tasks O2/O3/O6) ----------------------------
+    # Configure JSON logging first so OTel init messages are well-formed.
+    setup_json_logging(settings)
+    # OTel install adds its own ASGI middleware (tracing) onto ``app``; it must
+    # run before any middleware whose spans we want correlation IDs attached to.
+    setup_otel(app, settings)
+
+    # --- Middleware (order matters — last added runs innermost) --------------
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(LoggingMiddleware)
     app.add_middleware(
         SessionMiddleware,
         secret_key=settings.JWT_SECRET.get_secret_value(),
     )
+    # CorrelationIdMiddleware is added LAST so it is the innermost user
+    # middleware — by the time it runs, the OTel FastAPI middleware has
+    # already started the request span, so ``set_attribute`` lands on it.
+    app.add_middleware(CorrelationIdMiddleware)
 
     # --- Exception handlers ---------------------------------------------------
     @app.exception_handler(AppError)
