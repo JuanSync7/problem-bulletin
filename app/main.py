@@ -48,6 +48,10 @@ from app.routes.tickets import (
     EXCEPTION_HANDLERS as _TICKET_EXC_HANDLERS,
 )
 from app.routes.admin.agent_accounts import router as agent_accounts_admin_router
+from app.routes.agents import (
+    router as agents_router,
+    compat_router as agents_compat_router,
+)
 
 _EXCEPTION_STATUS_MAP: dict[type[AppError], int] = {
     ForbiddenTransitionError: 409,
@@ -115,6 +119,8 @@ def create_app() -> FastAPI:
     app.include_router(domains_router, prefix=API)
     app.include_router(tickets_router, prefix=API)
     app.include_router(agent_accounts_admin_router, prefix=API)
+    app.include_router(agents_router, prefix=API)
+    app.include_router(agents_compat_router, prefix=API)
     app.include_router(health_router)
 
     # --- Agent-kanban domain exception handlers ------------------------------
