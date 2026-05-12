@@ -25,8 +25,10 @@ class Settings(BaseSettings):
     BASE_URL: AnyHttpUrl = "http://localhost:8000"  # REQ-104
     TEAMS_WEBHOOK_URL: AnyHttpUrl | None = None
 
-    # --- Agent-Kanban observability (Task C4) ---
-    OTEL_EXPORTER_OTLP_ENDPOINT: str = ""  # NFR-906; empty disables OTel export
+    # --- Agent-Kanban observability (Task C4 / O2) ---
+    OTEL_EXPORTER_OTLP_ENDPOINT: str = ""  # NFR-906; empty disables OTLP export (falls back to console)
+    OTEL_SERVICE_NAME: str = "problem-bulletin"
+    OTEL_ENABLED: bool = False  # NFR-906: off by default (tests); enable in dev/prod
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
