@@ -17,15 +17,15 @@ stages:
     verdict: APPROVE
     iterations: 0
   spec_summary:
-    status: pending
-    output: null
-    verdict: null
-    iterations: 0
+    status: completed
+    output: "docs/AGENT_KANBAN/01b_SPEC_SUMMARY.md"
+    verdict: APPROVE
+    iterations: 1
   scope:
-    status: pending
-    output: null
-    verdict: null
-    iterations: 0
+    status: completed
+    output: "docs/AGENT_KANBAN/02_SCOPE.md"
+    verdict: APPROVE
+    iterations: 1
   architecture:
     status: pending
     output: null
