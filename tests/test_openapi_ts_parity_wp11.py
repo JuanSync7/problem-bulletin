@@ -193,6 +193,22 @@ WP11_ROUTES: list[tuple[str, str, str, str, str]] = [
         "notifications.ts",
         "PersonRef",
     ),
+    # v2.23-WP03: coverage expansion ----------------------------------------
+    # GET /api/v1/tickets/{id_or_key}/watchers.items[*] → TicketWatcherRead
+    # ↔ TicketWatcher. Route declares
+    # ``response_model=Page[TicketWatcherRead]`` (app/routes/tickets.py:713);
+    # we pin the inner-item schema (mirrors the AgentActivityItem /
+    # TicketNotificationRead precedent above — wrapper-level field set is
+    # owned by WP05_PAGE_PAIRS, inner item by WP11). ``watcher_type``
+    # discriminator mirrors the ``assignee_type`` pattern landed in
+    # WP47-WP49. Net-new typed consumer — no existing call sites today.
+    (
+        "get",
+        "/api/v1/tickets/{id_or_key}/watchers",
+        "TicketWatcherRead",
+        "tickets.ts",
+        "TicketWatcher",
+    ),
 ]
 
 
