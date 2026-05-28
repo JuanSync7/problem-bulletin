@@ -537,6 +537,38 @@ export async function listTicketWatchers(
   return request(`${BASE}/${encodeURIComponent(idOrKey)}/watchers`);
 }
 
+// ---------------------------------------------------------------------------
+// v2.24-WP03 — Typed consumer for GET /api/v1/tickets/{id_or_key}/attachments.
+//
+// Backend route returns ``Page[TicketAttachmentRead]`` (see
+// app/routes/tickets.py:786). The Pydantic schema is closed-with-extras
+// (``extra="allow"``) — the TS interface below pins the 10 known fields;
+// any backend-only additions slot into the wrapper's index-free shape.
+//
+// ``uploaded_by_type`` discriminator mirrors the ``watcher_type`` /
+// ``assignee_type`` pattern. Net-new typed consumer — no existing call
+// sites today (integration is a separate concern per the v2.23-WP03
+// precedent).
+// ---------------------------------------------------------------------------
+export interface TicketAttachment {
+  id: string;
+  ticket_id: string;
+  uploaded_by: string;
+  uploaded_by_type: "user" | "agent";
+  filename: string;
+  content_type: string;
+  byte_size: number;
+  storage_path: string;
+  agent_step_id: string | null;
+  created_at: string;
+}
+
+export async function listTicketAttachments(
+  idOrKey: string,
+): Promise<Page<TicketAttachment>> {
+  return request(`${BASE}/${encodeURIComponent(idOrKey)}/attachments`);
+}
+
 export async function linkTickets(
   sourceIdOrKey: string,
   targetId: string,

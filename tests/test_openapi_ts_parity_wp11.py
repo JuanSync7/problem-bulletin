@@ -209,6 +209,22 @@ WP11_ROUTES: list[tuple[str, str, str, str, str]] = [
         "tickets.ts",
         "TicketWatcher",
     ),
+    # v2.24-WP03: coverage expansion ----------------------------------------
+    # GET /api/v1/tickets/{id_or_key}/attachments.items[*] →
+    # TicketAttachmentRead ↔ TicketAttachment. Route declares
+    # ``response_model=Page[TicketAttachmentRead]`` (app/routes/tickets.py:786);
+    # we pin the inner-item schema (mirrors the TicketWatcherRead precedent
+    # above — wrapper-level field set is owned by WP05_PAGE_PAIRS, inner
+    # item by WP11). ``uploaded_by_type`` discriminator mirrors the
+    # ``watcher_type`` / ``assignee_type`` patterns. Net-new typed consumer —
+    # no existing call sites today.
+    (
+        "get",
+        "/api/v1/tickets/{id_or_key}/attachments",
+        "TicketAttachmentRead",
+        "tickets.ts",
+        "TicketAttachment",
+    ),
 ]
 
 
