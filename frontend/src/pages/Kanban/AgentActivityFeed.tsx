@@ -25,7 +25,7 @@ function fromWSEvent(evt: WSEvent): ActivityEntry | null {
     {};
   const ticketKey =
     (payload.ticket_key as string | undefined) ??
-    (payload as { ticket?: { key?: string } }).ticket?.key ??
+    (payload as { ticket?: { display_id?: string } }).ticket?.display_id ??
     null;
   return {
     id: `${evt.occurred_at ?? Date.now()}-${actor.id ?? "anon"}-${evt.event}`,

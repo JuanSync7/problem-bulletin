@@ -12,6 +12,9 @@ import uuid
 
 import pytest
 
+import pytest_asyncio
+from sqlalchemy import text as _sa_text
+
 from app.enums import ActorType
 from app.mcp_server.errors import map_exception_to_jsonrpc
 from app.mcp_server.tools import TOOLS
@@ -31,6 +34,16 @@ def _agent() -> Actor:
         label="bot",
         scopes=("tickets:write",),
     )
+
+
+async def _ensure_user_row(db, actor: Actor) -> None:
+    """Insert a stub users row so Ticket.reporter_id FK is satisfied."""
+    await db.execute(
+        _sa_text("INSERT INTO users (id, email, display_name) "
+                 "VALUES (:id, :email, :name) ON CONFLICT (id) DO NOTHING"),
+        {"id": actor.id, "email": f"u-{actor.id}@x.test", "name": str(actor.label)},
+    )
+    await db.flush()
 
 
 # ---------------------------------------------------------------------------
@@ -91,6 +104,7 @@ async def test_tool_registry_has_all_ten():
 @pytest.mark.asyncio
 async def test_create_ticket_returns_key_and_id(db):
     actor = _agent()
+    await _ensure_user_row(db, actor)
     res = await TOOLS["create_ticket"]["fn"](
         db, actor, title="from mcp", labels=["a"], correlation_id="cor1"
     )
@@ -103,6 +117,7 @@ async def test_create_ticket_returns_key_and_id(db):
 @pytest.mark.asyncio
 async def test_get_ticket_happy(db):
     actor = _agent()
+    await _ensure_user_row(db, actor)
     created = await TOOLS["create_ticket"]["fn"](
         db, actor, title="g", correlation_id=""
     )
@@ -125,6 +140,7 @@ async def test_get_ticket_not_found_returns_jsonrpc_error(db):
 @pytest.mark.asyncio
 async def test_update_status_transition(db):
     actor = _agent()
+    await _ensure_user_row(db, actor)
     created = await TOOLS["create_ticket"]["fn"](db, actor, title="t", correlation_id="")
     res = await TOOLS["update_status"]["fn"](
         db, actor, id_or_key=created["id"], to_status="in_progress",
@@ -137,6 +153,7 @@ async def test_update_status_transition(db):
 @pytest.mark.asyncio
 async def test_transition_invalid_returns_error(db):
     actor = _agent()
+    await _ensure_user_row(db, actor)
     created = await TOOLS["create_ticket"]["fn"](db, actor, title="x", correlation_id="")
     res = await TOOLS["transition"]["fn"](
         db, actor, id_or_key=created["id"], to_status="done", correlation_id=""
@@ -148,6 +165,8 @@ async def test_transition_invalid_returns_error(db):
 async def test_claim_and_already_claimed(db):
     actor1 = _agent()
     actor2 = _agent()
+    await _ensure_user_row(db, actor1)
+    await _ensure_user_row(db, actor2)
     created = await TOOLS["create_ticket"]["fn"](db, actor1, title="c", correlation_id="")
     ok = await TOOLS["claim"]["fn"](db, actor1, id_or_key=created["id"], correlation_id="")
     assert ok["assignee_id"] == str(actor1.id)
@@ -158,6 +177,7 @@ async def test_claim_and_already_claimed(db):
 @pytest.mark.asyncio
 async def test_assign_with_version(db):
     actor = _agent()
+    await _ensure_user_row(db, actor)
     created = await TOOLS["create_ticket"]["fn"](db, actor, title="a", correlation_id="")
     target = uuid.uuid4()
     res = await TOOLS["assign"]["fn"](
@@ -175,6 +195,7 @@ async def test_assign_with_version(db):
 @pytest.mark.asyncio
 async def test_list_my_tickets_filters_by_actor(db):
     actor = _agent()
+    await _ensure_user_row(db, actor)
     created = await TOOLS["create_ticket"]["fn"](db, actor, title="mine", correlation_id="")
     await TOOLS["claim"]["fn"](db, actor, id_or_key=created["id"], correlation_id="")
     res = await TOOLS["list_my_tickets"]["fn"](db, actor, correlation_id="")
@@ -185,6 +206,7 @@ async def test_list_my_tickets_filters_by_actor(db):
 @pytest.mark.asyncio
 async def test_add_comment(db):
     actor = _agent()
+    await _ensure_user_row(db, actor)
     created = await TOOLS["create_ticket"]["fn"](db, actor, title="cm", correlation_id="")
     res = await TOOLS["add_comment"]["fn"](
         db, actor, id_or_key=created["id"], body="hello", correlation_id=""
@@ -195,14 +217,15 @@ async def test_add_comment(db):
 @pytest.mark.asyncio
 async def test_link_tickets_and_duplicate(db):
     actor = _agent()
+    await _ensure_user_row(db, actor)
     a = await TOOLS["create_ticket"]["fn"](db, actor, title="A", correlation_id="")
     b = await TOOLS["create_ticket"]["fn"](db, actor, title="B", correlation_id="")
     ok = await TOOLS["link_tickets"]["fn"](
-        db, actor, source=a["id"], target=b["id"], link_type="relates", correlation_id=""
+        db, actor, source=a["id"], target=b["id"], link_type="relates_to", correlation_id=""
     )
     assert "link_id" in ok
     dup = await TOOLS["link_tickets"]["fn"](
-        db, actor, source=a["id"], target=b["id"], link_type="relates", correlation_id=""
+        db, actor, source=a["id"], target=b["id"], link_type="relates_to", correlation_id=""
     )
     assert dup["error"]["code"] == -32011
 
@@ -210,6 +233,7 @@ async def test_link_tickets_and_duplicate(db):
 @pytest.mark.asyncio
 async def test_search_tickets(db):
     actor = _agent()
+    await _ensure_user_row(db, actor)
     await TOOLS["create_ticket"]["fn"](db, actor, title="bananarama", correlation_id="")
     res = await TOOLS["search_tickets"]["fn"](db, actor, query="bananarama", correlation_id="")
     assert any("bananarama" in t["title"] for t in res["items"])

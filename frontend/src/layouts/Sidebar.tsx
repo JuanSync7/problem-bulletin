@@ -2,6 +2,9 @@ import React from "react";
 import { NavLink } from "react-router-dom";
 import { useTheme } from "../theme";
 import { useAnonymousMode } from "../hooks/useAnonymousMode";
+import { getUnreadCount } from "../api/notifications";
+import { useRealtimeNotifications } from "../realtime/useRealtimeNotifications";
+import type { RealtimePayload } from "../realtime/useRealtimeNotifications";
 
 const APP_NAME = import.meta.env.VITE_APP_NAME || "Aion Bulletin";
 
@@ -20,7 +23,9 @@ const mainNavItems: NavItem[] = [
   { label: "Home", to: "/" },
   { label: "Problems", to: "/problems" },
   { label: "Kanban Board", to: "/board" },
-  { label: "Submit", to: "/submit" },
+  { label: "Activity", to: "/activity" },
+  { label: "Submit Problem", to: "/submit" },
+  { label: "Create Ticket", to: "/tickets/new" },
   { label: "Search", to: "/search" },
   { label: "AI Search", to: "/ai-search" },
   { label: "Leaderboard", to: "/leaderboard" },
@@ -36,6 +41,50 @@ const adminNavItems: NavItem[] = [
 export function Sidebar({ isOpen, onClose, isAdmin = false }: SidebarProps) {
   const { isDark, toggle } = useTheme();
   const { isAnonymous, toggle: toggleAnon } = useAnonymousMode();
+  // v2.2-WP14: cheap one-shot fetch of unread mentions for the Activity badge.
+  const [unread, setUnread] = React.useState<number>(0);
+  React.useEffect(() => {
+    let cancelled = false;
+    getUnreadCount()
+      .then((n) => {
+        if (!cancelled) setUnread(n);
+      })
+      .catch(() => {
+        /* silent — badge stays 0 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // v2.4-WP31: realtime WS fanout — increment/decrement badge without polling.
+  // v2.5-WP34: agent_id field signals an agent-inbox read event, not a
+  // user-inbox read. The sidebar badge tracks the user's own inbox, so
+  // agent-kind read events must NOT decrement it. The WS connection
+  // subscribes to both user and agent channels; without this guard, an
+  // agent-inbox mark-read would double-decrement (once via the agent
+  // channel, once via the user-channel re-publish added in WP34 Part B).
+  const handleRealtimePayload = React.useCallback((payload: RealtimePayload) => {
+    if (payload.type === "ticket_notification") {
+      // Only increment for user-inbox notifications (no agent_id).
+      if (!payload.agent_id) {
+        setUnread((prev) => prev + 1);
+      }
+    } else if (payload.type === "notification_read") {
+      // Skip agent-inbox reads — they don't affect the user-inbox badge.
+      if (!payload.agent_id) {
+        setUnread((prev) => Math.max(0, prev - 1));
+      }
+    } else if (payload.type === "notification_read_all") {
+      // Skip agent-inbox bulk reads.
+      if (!payload.agent_id) {
+        const count = typeof payload.count === "number" ? payload.count : 1;
+        setUnread((prev) => Math.max(0, prev - count));
+      }
+    }
+  }, []);
+
+  useRealtimeNotifications(handleRealtimePayload);
 
   return (
     <>
@@ -71,6 +120,14 @@ export function Sidebar({ isOpen, onClose, isAdmin = false }: SidebarProps) {
                   onClick={onClose}
                 >
                   {item.label}
+                  {item.to === "/activity" && unread > 0 && (
+                    <span
+                      className="sidebar__link-badge"
+                      aria-label={`${unread} unread mentions`}
+                    >
+                      {unread}
+                    </span>
+                  )}
                 </NavLink>
               </li>
             ))}

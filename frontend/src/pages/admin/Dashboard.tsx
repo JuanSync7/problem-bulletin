@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { AdminRouteGuard } from "../../components/AdminRouteGuard";
+import { parseApiError } from "../../api/errors";
 import "./Admin.css";
 
 interface Stats {
@@ -18,7 +19,13 @@ function DashboardContent() {
     async function fetchStats() {
       try {
         const res = await fetch("/api/admin/stats", { credentials: "include" });
-        if (!res.ok) throw new Error("Failed to fetch stats");
+        if (!res.ok) {
+          // v2.14-WP04: surface backend envelope message (was "Failed to
+          // fetch stats" placeholder).
+          const errBody = await res.json().catch(() => null);
+          const parsed = parseApiError(res, errBody);
+          throw new Error(parsed.message);
+        }
         const data: Stats = await res.json();
         setStats(data);
       } catch (err) {

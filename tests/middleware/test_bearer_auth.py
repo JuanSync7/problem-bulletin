@@ -13,6 +13,7 @@ from app.enums import ActorType, UserRole
 from app.middleware.bearer_auth import get_actor
 from app.models.user import User
 from app.services.agent_accounts import AgentAccountService
+from tests.helpers.seed_agent_account import seed_user
 
 
 def _make_app(db_session):
@@ -46,7 +47,10 @@ async def test_missing_credentials_returns_401(db):
 async def test_bearer_agent_api_key_resolves_to_agent_actor(db):
     svc = AgentAccountService()
     name = f"bot-{uuid.uuid4().hex[:8]}"
-    account, plaintext = await svc.create_account(db, name=name, scopes=["tickets:read"])
+    creator = await seed_user(db)
+    account, plaintext = await svc.create_account(
+        db, name=name, scopes=["tickets:read"], created_by=creator,
+    )
     await db.flush()
 
     app = _make_app(db)

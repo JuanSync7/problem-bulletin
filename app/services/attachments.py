@@ -16,8 +16,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.enums import ParentType
-from app.exceptions import FileSizeLimitError, FileTypeNotAllowedError
+from app.exceptions import (
+    FileSizeLimitError,
+    FileTypeNotAllowedError,
+    ForbiddenError,
+    NotFoundError,
+)
 from app.models.attachment import Attachment
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +180,12 @@ async def delete_attachment(
 ) -> None:
     """Delete an attachment row and then remove the file from disk.
 
+    Service-layer auth (v2.11-WP04, decision A5-a): the actor must be the
+    uploader or an admin.  Raises :class:`NotFoundError` if the attachment
+    does not exist and :class:`ForbiddenError` if the actor lacks
+    permission.  The route layer no longer pre-enforces these checks; it
+    delegates to this service.
+
     The DB row is deleted first (inside the session transaction).  The file
     is removed after commit; if the disk delete fails we log the error but
     do not roll back.
@@ -183,7 +195,18 @@ async def delete_attachment(
     )
     attachment = result.scalar_one_or_none()
     if attachment is None:
-        raise ValueError("Attachment not found")
+        raise NotFoundError(f"Attachment not found: {attachment_id!s}")
+
+    # Auth: uploader-or-admin (lifted from the route in v2.11-WP04).
+    if attachment.uploader_id != actor_id:
+        actor_result = await db.execute(
+            select(User).where(User.id == actor_id)
+        )
+        actor = actor_result.scalar_one_or_none()
+        if actor is None or actor.role != "admin":
+            raise ForbiddenError(
+                "You do not have permission to delete this attachment"
+            )
 
     storage_path = attachment.storage_path
 

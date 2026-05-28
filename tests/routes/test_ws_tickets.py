@@ -11,7 +11,6 @@ from __future__ import annotations
 import uuid
 
 import pytest
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.events import (
@@ -20,13 +19,11 @@ from app.events import (
     flush_session_events,
     stage_event,
 )
-from app.routes.ws_tickets import router as ws_tickets_router
+from tests.helpers.app_factory import build_test_app
 
 
-def _build_app() -> FastAPI:
-    app = FastAPI()
-    app.include_router(ws_tickets_router, prefix="/api")
-    return app
+def _build_app():
+    return build_test_app()
 
 
 def test_ws_receives_published_event():
@@ -97,7 +94,17 @@ async def test_stage_and_flush_session_events(db):
 @pytest.mark.asyncio
 async def test_service_create_stages_event(db, agent_actor):
     """TicketService.create stages a ticket.created envelope."""
+    from sqlalchemy import text as _sa_text
     from app.services.tickets import TicketService
+
+    # Ticket.reporter_id has an FK to users(id); insert a stub user row first.
+    await db.execute(
+        _sa_text("INSERT INTO users (id, email, display_name) "
+                 "VALUES (:id, :email, :name)"),
+        {"id": agent_actor.id, "email": f"u-{agent_actor.id}@x.test", "name": "agent"},
+    )
+    await db.flush()
+
     q = bus.subscribe()
     try:
         svc = TicketService()
@@ -110,6 +117,6 @@ async def test_service_create_stages_event(db, agent_actor):
         assert evt["event"] == "ticket.created"
         assert evt["ticket_id"] == str(ticket.id)
         assert evt["correlation_id"] == "corr-svc-1"
-        assert evt["payload"]["ticket_key"] == ticket.key
+        assert evt["payload"]["ticket"]["display_id"] == ticket.computed_display_id
     finally:
         bus.unsubscribe(q)

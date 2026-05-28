@@ -2,9 +2,9 @@
 
 Frontend ``AgentActivityFeed`` calls ``GET /api/agents/activity`` for a
 projection of the audit_log filtered to agent-actors. Read-only,
-paginated by ``limit``/``offset``. Joins to ``tickets`` for ``ticket_key``
-when the audited entity is a ticket (or a ticket comment/link with a
-discoverable parent ticket).
+paginated by ``limit``/``offset``. Joins to ``tickets`` for the ticket's
+``display_id`` (legacy field name ``ticket_key``) when the audited entity
+is a ticket (or a ticket comment/link with a discoverable parent ticket).
 """
 from __future__ import annotations
 
@@ -19,6 +19,8 @@ from app.models.audit_log_event import AuditLogEvent
 from app.models.ticket import Ticket
 from app.models.ticket_comment import TicketComment
 from app.models.ticket_link import TicketLink
+from app.schemas.common import Page
+from app.schemas.tickets import AgentActivityItem
 
 router = APIRouter(prefix="/v1/agents", tags=["agents"])
 # Compat alias used by the frontend (no /v1 prefix). Both are mounted from main.py.
@@ -29,18 +31,20 @@ async def _resolve_ticket_key(
     db: AsyncSession, entity_type: str, entity_id
 ) -> Optional[str]:
     if entity_type == "ticket":
-        row = await db.execute(select(Ticket.key).where(Ticket.id == entity_id))
+        row = await db.execute(
+            select(Ticket.display_id).where(Ticket.id == entity_id)
+        )
         return row.scalar_one_or_none()
     if entity_type == "ticket_comment":
         row = await db.execute(
-            select(Ticket.key)
+            select(Ticket.display_id)
             .join(TicketComment, TicketComment.ticket_id == Ticket.id)
             .where(TicketComment.id == entity_id)
         )
         return row.scalar_one_or_none()
     if entity_type == "ticket_link":
         row = await db.execute(
-            select(Ticket.key)
+            select(Ticket.display_id)
             .join(TicketLink, TicketLink.source_id == Ticket.id)
             .where(TicketLink.id == entity_id)
         )
@@ -83,26 +87,35 @@ async def _list_activity(
     return items
 
 
-@router.get("/activity")
+@router.get("/activity", response_model=Page[AgentActivityItem])
 async def list_activity(
     db: AsyncSession = Depends(get_db),
     actor_type: Optional[str] = Query(default="agent"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     project_id: Optional[str] = Query(default=None),  # accepted but unused (no project model yet)
-) -> dict[str, Any]:
+) -> Page[AgentActivityItem]:
+    """List agent-actor audit-log rows as a ``Page[AgentActivityItem]``.
+
+    v2.11-WP06 — converged from the legacy ``{items, limit, offset}`` dict
+    onto the canonical ``Page[T]`` envelope. The ``limit``/``offset`` query
+    params are still honoured for offset pagination; ``next_cursor`` is
+    always ``None`` (this endpoint pre-dates the cursor scheme) and
+    ``total`` is left as ``None`` (the audit_log table is unbounded so a
+    blanket COUNT(*) would be wasteful).
+    """
     items = await _list_activity(db, actor_type=actor_type, limit=limit, offset=offset)
-    return {"items": items, "limit": limit, "offset": offset}
+    return Page[AgentActivityItem](items=items, next_cursor=None, total=None)
 
 
-@compat_router.get("/activity")
+@compat_router.get("/activity", response_model=Page[AgentActivityItem])
 async def list_activity_compat(
     db: AsyncSession = Depends(get_db),
     actor_type: Optional[str] = Query(default="agent"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     project_id: Optional[str] = Query(default=None),
-) -> dict[str, Any]:
+) -> Page[AgentActivityItem]:
     return await list_activity(
         db=db, actor_type=actor_type, limit=limit, offset=offset, project_id=project_id
     )

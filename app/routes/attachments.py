@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import CurrentUser, require_owner_or_admin
+from app.auth.dependencies import CurrentUser
 from app.config import get_settings
 from app.database import get_db
 from app.enums import ParentType
@@ -111,25 +111,16 @@ async def delete_attachment_route(
     user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Delete an attachment (owner or admin).  REQ-410."""
+    """Delete an attachment (owner or admin).  REQ-410.
+
+    Auth (owner-or-admin) and existence checks are enforced by the
+    service layer (``app.services.attachments.delete_attachment`` —
+    v2.11-WP04 decision A5-a).  ``NotFoundError`` -> 404 and
+    ``ForbiddenError`` -> 403 are mapped via the global handler in
+    ``app.main``.
+    """
     att_uuid = uuid.UUID(attachment_id)
-
-    att = await get_attachment(db, att_uuid)
-    if att is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Attachment not found",
-        )
-
-    await require_owner_or_admin(str(att.uploader_id), user)
-
-    try:
-        await delete_attachment(db, att_uuid, user.id)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exc),
-        )
+    await delete_attachment(db, att_uuid, user.id)
 
 
 @router.get("/attachments/{attachment_id}/download")

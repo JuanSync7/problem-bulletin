@@ -18,7 +18,6 @@ import json
 import logging
 
 import pytest
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
@@ -27,8 +26,8 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
     InMemorySpanExporter,
 )
 
-from app.middleware.correlation import CorrelationIdMiddleware
 from app.observability.logging import TraceAwareJsonFormatter
+from tests.helpers.app_factory import build_test_app
 
 
 @pytest.fixture(autouse=True)
@@ -56,6 +55,30 @@ def test_e2e_correlation_trace_log_alignment():
     trace.set_tracer_provider(provider)
     tracer = trace.get_tracer("e2e")
 
+    # ---- App via canonical factory (incl. CorrelationIdMiddleware) ---------
+    # Build the app BEFORE wiring log capture: create_app() calls
+    # setup_json_logging() which clears root handlers, so a buf-handler
+    # installed earlier would be wiped out.
+    app = build_test_app()
+
+    def _echo_handler():
+        # Open a span and emit a log line INSIDE it.
+        with tracer.start_as_current_span("echo-handler"):
+            logging.getLogger("e2e.echo").info("handling request")
+        return {"ok": True}
+
+    # Register our probe BEFORE the SPA catch-all (``/{full_path:path}``) that
+    # ``create_app()`` mounts last; FastAPI matches in registration order, so
+    # appending would let the SPA shadow us.
+    app.add_api_route("/_t_echo", _echo_handler, methods=["GET"])
+    from fastapi.routing import APIRoute as _APIRoute
+    _probe = next(
+        r for r in app.routes
+        if isinstance(r, _APIRoute) and r.path == "/_t_echo"
+    )
+    app.routes.remove(_probe)
+    app.routes.insert(0, _probe)
+
     # ---- JSON log capture --------------------------------------------------
     buf = io.StringIO()
     handler = logging.StreamHandler(buf)
@@ -72,22 +95,11 @@ def test_e2e_correlation_trace_log_alignment():
     root.handlers = [handler]
     root.setLevel(logging.DEBUG)
 
-    # ---- Minimal app -------------------------------------------------------
-    app = FastAPI()
-    app.add_middleware(CorrelationIdMiddleware)
-
-    @app.get("/echo")
-    def echo():
-        # Open a span and emit a log line INSIDE it.
-        with tracer.start_as_current_span("echo-handler"):
-            logging.getLogger("e2e.echo").info("handling request")
-        return {"ok": True}
-
     try:
         client = TestClient(app)
         # Outer span so the middleware has somewhere to attach correlation_id.
         with tracer.start_as_current_span("e2e-outer"):
-            res = client.get("/echo", headers={"X-Correlation-ID": "test-corr-id"})
+            res = client.get("/_t_echo", headers={"X-Correlation-ID": "test-corr-id"})
     finally:
         root.handlers = old_handlers
         root.setLevel(old_level)

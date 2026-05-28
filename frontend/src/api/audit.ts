@@ -7,7 +7,8 @@
  * instead of throwing — the activity panel will then simply show "no recent
  * activity" until the backend ships.
  */
-import { ApiError } from "./tickets";
+import { ApiError, type ErrorEnvelope } from "./tickets";
+import { parseApiError } from "./errors";
 
 export interface ActivityEntry {
   id: string;
@@ -43,12 +44,15 @@ export async function listAgentActivity(
     });
     if (res.status === 404) return [];
     if (!res.ok) {
-      let env = null;
-      try {
-        env = (await res.json())?.error ?? null;
-      } catch {
-        /* ignore */
-      }
+      // v2.13-WP03: tolerate both unified envelope + legacy {detail}.
+      const body = await res.json().catch(() => null);
+      const parsed = parseApiError(res, body);
+      const env: ErrorEnvelope = {
+        code: parsed.code,
+        message: parsed.message,
+        details: (parsed.details ?? undefined) as Record<string, unknown> | undefined,
+        correlation_id: parsed.correlation_id ?? undefined,
+      };
       throw new ApiError(res.status, env);
     }
     const body = await res.json();

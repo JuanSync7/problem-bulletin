@@ -24,7 +24,11 @@ class AuditLogEvent(Base):
     __tablename__ = "audit_log"
     __table_args__ = (
         CheckConstraint(
-            "actor_type IN ('user','agent')", name="ck_audit_log_actor_type",
+            "actor_type IN ('user','agent')", name="actor_type",
+        ),
+        CheckConstraint(
+            "actor_type = 'agent' OR agent_step_id IS NULL",
+            name="agent_step_id",
         ),
         {"extend_existing": True},
     )
@@ -40,6 +44,7 @@ class AuditLogEvent(Base):
     actor_type: Mapped[str] = mapped_column(Text, nullable=False)
     diff: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     correlation_id: Mapped[str] = mapped_column(Text, nullable=False)
+    agent_step_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(),
     )

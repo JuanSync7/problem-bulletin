@@ -18,6 +18,12 @@ const AdminTags = lazy(() => import("./pages/admin/Tags"));
 const AdminUsers = lazy(() => import("./pages/admin/Users"));
 const AdminModeration = lazy(() => import("./pages/admin/Moderation"));
 const KanbanBoardPage = lazy(() => import("./pages/Kanban"));
+const CreateTicket = lazy(() => import("./pages/CreateTicket/CreateTicket"));
+const ActivityPage = lazy(() => import("./pages/Activity"));
+const TicketDetail = lazy(() => import("./pages/TicketDetail"));
+const ComponentDetail = lazy(() => import("./pages/ComponentDetail"));
+const LabelDetail = lazy(() => import("./pages/LabelDetail"));
+const UserDetail = lazy(() => import("./pages/UserDetail"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 function AppFallback() {
@@ -30,7 +36,10 @@ function AppFallback() {
 
 export default function App() {
   return (
-    <BrowserRouter basename={import.meta.env.BASE_URL}>
+    <BrowserRouter
+      basename={import.meta.env.BASE_URL}
+      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+    >
       <ThemeProvider>
         <ToastProvider>
         <MainLayout>
@@ -50,6 +59,12 @@ export default function App() {
               <Route path="/admin/users" element={<AdminUsers />} />
               <Route path="/admin/moderation" element={<AdminModeration />} />
               <Route path="/board" element={<KanbanBoardPage />} />
+              <Route path="/activity" element={<ActivityPage />} />
+              <Route path="/tickets/new" element={<CreateTicket />} />
+              <Route path="/tickets/:displayId" element={<TicketDetail />} />
+              <Route path="/components/:id" element={<ComponentDetail />} />
+              <Route path="/labels/:name" element={<LabelDetail />} />
+              <Route path="/users/:handle" element={<UserDetail />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>

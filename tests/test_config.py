@@ -2,6 +2,8 @@
 Tests for app.config — Settings construction, validation, caching, and defaults.
 Derived from: docs/AION_BULLETIN_TEST_DOCS.md — Foundation Layer: app/config.py
 """
+import os
+
 import pytest
 from pydantic import ValidationError
 
@@ -21,12 +23,58 @@ REQUIRED_ENV = {
 }
 
 
+# Every env var that pydantic-settings could pick up for Settings fields.
+# Cleared in `_isolated_env` so explicit-kwarg construction is deterministic.
+_SETTINGS_ENV_KEYS: tuple[str, ...] = (
+    "DATABASE_URL",
+    "AZURE_TENANT_ID",
+    "AZURE_CLIENT_ID",
+    "AZURE_CLIENT_SECRET",
+    "JWT_SECRET",
+    "SMTP_HOST",
+    "SMTP_PORT",
+    "SMTP_FROM",
+    "APP_NAME",
+    "DEV_AUTH_BYPASS",
+    "ENVIRONMENT",
+    "STORAGE_PATH",
+    "BASE_URL",
+    "TEAMS_WEBHOOK_URL",
+    "OTEL_EXPORTER_OTLP_ENDPOINT",
+    "OTEL_SERVICE_NAME",
+    "OTEL_ENABLED",
+)
+
+
+@pytest.fixture
+def _isolated_env(monkeypatch):
+    """Strip ambient Settings env vars so explicit kwargs are the only source.
+
+    `tests/conftest.py` sets defaults like APP_NAME=Aion Bulletin Test and
+    STORAGE_PATH=/tmp/aion-test-storage at import time. pydantic-settings v2
+    still reads env vars even when kwargs are passed; that ambient layer
+    masks both "default value" assertions and "missing required field"
+    assertions. Stripping the env for the duration of the test makes
+    `Settings(**kwargs)` behave like a pure constructor.
+    """
+    for key in _SETTINGS_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+    # Also block .env file resolution so a developer's local .env can't
+    # bleed in during a "missing required field" assertion.
+    monkeypatch.setenv("PYDANTIC_SETTINGS_NO_DOTENV", "1")
+    yield
+
+
 def _make_settings(**overrides):
-    """Construct Settings with required fields, allowing field overrides."""
+    """Construct Settings with required fields, allowing field overrides.
+
+    Callers that need the ambient env stripped must depend on the
+    `_isolated_env` fixture; this helper itself is env-agnostic.
+    """
     from app.config import Settings
 
     env = {**REQUIRED_ENV, **overrides}
-    return Settings(**env)
+    return Settings(_env_file=None, **env)
 
 
 # ---------------------------------------------------------------------------
@@ -39,7 +87,7 @@ class TestSettingsConstruction:
         settings = _make_settings()
         assert settings is not None
 
-    def test_default_app_name(self):
+    def test_default_app_name(self, _isolated_env):
         """REQ: APP_NAME defaults to 'Aion Bulletin' when absent."""
         settings = _make_settings()
         assert settings.APP_NAME == "Aion Bulletin"
@@ -59,7 +107,7 @@ class TestSettingsConstruction:
         settings = _make_settings()
         assert settings.ENVIRONMENT == "development"
 
-    def test_default_storage_path(self):
+    def test_default_storage_path(self, _isolated_env):
         """REQ: STORAGE_PATH defaults to '/data/attachments' when absent."""
         settings = _make_settings()
         assert settings.STORAGE_PATH == "/data/attachments"
@@ -154,20 +202,22 @@ class TestMissingRequiredFields:
         "SMTP_FROM",
         "BASE_URL",
     ])
-    def test_missing_single_required_field_raises_validation_error(self, missing_field):
+    def test_missing_single_required_field_raises_validation_error(
+        self, missing_field, _isolated_env
+    ):
         """REQ: Any absent required field causes ValidationError at construction time."""
         from app.config import Settings
 
         env = {k: v for k, v in REQUIRED_ENV.items() if k != missing_field}
         with pytest.raises((ValidationError, Exception)):
-            Settings(**env)
+            Settings(_env_file=None, **env)
 
-    def test_all_required_fields_missing_raises_validation_error(self):
+    def test_all_required_fields_missing_raises_validation_error(self, _isolated_env):
         """REQ: All required fields absent raises a single ValidationError listing all fields."""
         from app.config import Settings
 
         with pytest.raises((ValidationError, Exception)):
-            Settings()
+            Settings(_env_file=None)
 
     def test_invalid_base_url_raises_validation_error(self):
         """REQ: BASE_URL='not_a_url' raises ValidationError at construction time."""

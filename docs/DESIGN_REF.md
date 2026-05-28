@@ -1188,7 +1188,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://problemboard:devpass@db:5432/problemboard
       - DEV_AUTH_BYPASS=true   # remove for real auth testing
-      - JWT_SECRET=dev-secret-not-for-production
+      - JWT_SECRET=__set_me__   # placeholder — must be set to a real ≥32-char secret; never use this literal in any environment
       - ENV=development
     volumes:
       - ./backend/app:/app/app:Z   # hot reload

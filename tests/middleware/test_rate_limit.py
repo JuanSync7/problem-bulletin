@@ -295,20 +295,20 @@ class TestCheckMagicLinkRateDependency:
         """check_magic_link_rate should not raise for the first MAX_REQUESTS calls."""
         # Patch the global limiter used by the dependency
         fresh = _fresh_limiter()
-        with patch("app.middleware.rate_limit._limiter", fresh):
+        with patch("app.middleware.rate_limit.magic_link_limiter", fresh):
             with patch("time.time", return_value=1000.0):
                 for _ in range(MAX_REQUESTS):
-                    await check_magic_link_rate(email="dep-test@example.com")
+                    check_magic_link_rate(email="dep-test@example.com")
 
     @pytest.mark.asyncio
     async def test_dependency_raises_429_when_limit_exceeded(self):
         fresh = _fresh_limiter()
-        with patch("app.middleware.rate_limit._limiter", fresh):
+        with patch("app.middleware.rate_limit.magic_link_limiter", fresh):
             with patch("time.time", return_value=1000.0):
                 for _ in range(MAX_REQUESTS):
-                    await check_magic_link_rate(email="dep-limited@example.com")
+                    check_magic_link_rate(email="dep-limited@example.com")
 
                 with pytest.raises(HTTPException) as exc_info:
-                    await check_magic_link_rate(email="dep-limited@example.com")
+                    check_magic_link_rate(email="dep-limited@example.com")
 
         assert exc_info.value.status_code == 429

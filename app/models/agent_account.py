@@ -23,14 +23,21 @@ class AgentAccount(Base):
         server_default=func.gen_random_uuid(),
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
+    # v2.2-WP17: materialised handle (was derived from slugified ``name``).
+    # Unique per-kind via index ``uq_agent_accounts_handle``.
+    handle: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     api_key_hash: Mapped[str] = mapped_column(Text, nullable=False)
     api_key_prefix: Mapped[str] = mapped_column(Text, nullable=False)
     scopes: Mapped[list[str]] = mapped_column(
         ARRAY(Text), nullable=False, default=list,
     )
-    created_by: Mapped[UUID | None] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("users.id"), nullable=True,
+    # v2.11-WP01: tightened to NOT NULL to mirror migration ``a17`` at the
+    # ORM / type-checker boundary. Every insert path (production route +
+    # ``tests.helpers.seed_agent_account``) already supplies a value; this
+    # closes the drift the DB has enforced since v2.10-WP02.
+    created_by: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("users.id"), nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(),

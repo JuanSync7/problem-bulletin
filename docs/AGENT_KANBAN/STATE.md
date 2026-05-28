@@ -135,6 +135,45 @@ for what was actually built; treat planning docs as historical intent.
    if we ever want guaranteed delivery (would need a stream like Redis or
    per-client ack/resume).
 
+## WP25 — Notification kinds + minimal agent inbox
+
+### Spec
+Two new notification kinds (`ticket_assigned`, `ticket_state_change`) wired
+into the existing `ticket_notifications` table (pure app-layer — no migration,
+`kind` is plain TEXT with no CHECK constraint). Agent-recipient inbox view
+surfaced via `?recipient_kind=agent` on `GET /api/v1/notifications` and a
+Me/My-agents toggle in `MentionsTab`.
+
+### Files touched
+| File | Change |
+|---|---|
+| `app/services/ticket_notifications.py` | Added `fanout_assigned`, `fanout_state_change` (with 60s coalescing via SAVEPOINT), `list_for_agent_recipients`, `_STATE_CHANGE_COALESCE_SECONDS` constant |
+| `app/services/tickets.py` | Hooked `fanout_assigned` into `assign()` and `fanout_state_change` into `transition()` |
+| `app/routes/notifications_v1.py` | Added `recipient_kind: Literal["user","agent"]` query param to `list_notifications`; agent path resolves owned agents via `AgentAccount.created_by` |
+| `frontend/src/api/notifications.ts` | Added `recipient_kind` to `ListNotificationsParams` and forwarded to API |
+| `frontend/src/pages/Activity/MentionsTab.tsx` | Per-kind rendering (mention/assigned/state_change/fallback); Me/My-agents toggle with disabled+tooltip when no agent accounts |
+| `tests/services/test_ticket_notifications_wp25.py` | 9 live-DB service tests for new fanout paths |
+| `tests/routes/test_notifications_wp25.py` | 3 route tests for `recipient_kind=agent` |
+| `frontend/src/pages/Activity/__tests__/MentionsTab.test.tsx` | Extended with 5 new tests for WP25 rendering + toggle |
+
+### Tests
+- Backend service: 9 new tests (assigned happy-path, skip self-assign, skip null assignee; state-change notifies assignee+watchers, skips actor, coalesces within 60s, no-coalesce after read; agent recipient list empty/populated).
+- Backend route: 3 new tests (agent kind returns only agent rows, empty when no owned agents, default falls back to user).
+- Frontend: 5 new tests (assigned label, state-change label, unknown fallback, Me/My-agents toggle, disabled tooltip).
+- All 23 backend WP25 tests pass; total backend suite: 306 failed / 691 passed (baseline 306/679 — no regressions, +12 new passing).
+- All 86 frontend tests pass; build clean.
+
+### Lessons
+- `AgentAccount.created_by` (FK to `users.id`) cleanly maps ownership without a new column.
+- SAVEPOINT for coalescing INSERT races keeps the parent TX alive even under concurrent writes.
+- Per-kind rendering in `renderKindLabel` keeps the JSX linear without prop drilling.
+
+### Follow-ups for v2.4
+- `mark_read` and `mark_all_read` routes still hard-code `recipient_type="user"`. Extend to accept `recipient_kind` so agents can mark their inbox read.
+- Coalescing window (60s) is hardcoded; could become a project-level setting.
+- `AgentAccount.created_by` could be NULL for old agent rows created without an owner — a backfill or ownership migration would be needed for full multi-owner agent support.
+- Real-time push for `ticket_assigned` / `ticket_state_change` (WebSocket event stage already calls `stage_event`; a WS consumer hook could fan to the recipient's WS session).
+
 ## Environment notes
 - venv: `uv venv --python 3.12` at `.venv/`
 - pyproject.toml: includes `itsdangerous`; legacy `app/schemas/` content lives in `app/schemas/_legacy.py`

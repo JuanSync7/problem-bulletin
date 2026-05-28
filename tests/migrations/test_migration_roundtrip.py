@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 
 import pytest
 import asyncio
@@ -19,12 +20,16 @@ from sqlalchemy.exc import OperationalError
 _DEFAULT_URL = "postgresql+asyncpg://aion:changeme@localhost:5432/aion_bulletin"
 TEST_DB_URL = os.getenv("PB_TEST_DATABASE_URL", _DEFAULT_URL)
 
-# All four new revisions, in chain order.
+# All agent-kanban revisions plus the Step 1/3 renames, in chain order.
 AGENT_KANBAN_REVS = [
     "a1_agent_kanban",
     "a2_agent_kanban",
     "a3_agent_kanban",
     "a4_agent_kanban",
+    "a5_agent_kanban",
+    "a6_rename_tickets_to_problems",
+    "a7_create_work_items",
+    "a8_finalize_ticket_split",
 ]
 
 
@@ -79,7 +84,7 @@ pytestmark = pytest.mark.skipif(
 def _alembic(*args: str) -> subprocess.CompletedProcess:
     env = {**os.environ, "DATABASE_URL": TEST_DB_URL}
     return subprocess.run(
-        ["alembic", *args],
+        [sys.executable, "-m", "alembic", *args],
         capture_output=True,
         text=True,
         env=env,
@@ -87,28 +92,51 @@ def _alembic(*args: str) -> subprocess.CompletedProcess:
     )
 
 
-def test_chain_reaches_head_a4():
-    """Confirms alembic upgrade head lands on a4_agent_kanban."""
+def _current_head_revision() -> str:
+    """Return the actual head revision id reported by ``alembic heads``.
+
+    The roundtrip suite was originally pinned to ``a8_finalize_ticket_split``
+    (the last agent-kanban rev at v2.10 inception). The chain has since
+    extended (a9..a18+); rather than relock on every new revision, ask
+    alembic for its current head.
+    """
+    res = _alembic("heads")
+    assert res.returncode == 0, res.stderr
+    # Output looks like "a18_project_coalesce_seconds (head)\n"
+    out = (res.stdout or "").strip().splitlines()
+    assert out, f"alembic heads returned no output: {res.stdout!r} {res.stderr!r}"
+    return out[0].split()[0]
+
+
+def test_chain_reaches_head_rename():
+    """Confirms alembic upgrade head lands on the live head revision."""
+    head = _current_head_revision()
     res = _alembic("upgrade", "head")
     assert res.returncode == 0, res.stderr
     res2 = _alembic("current")
-    assert "a4_agent_kanban" in res2.stdout + res2.stderr
+    assert head in res2.stdout + res2.stderr
 
 
 def test_each_agent_kanban_revision_is_reversible():
-    """Downgrade by one then re-upgrade for each of a4..a1."""
+    """Walk the whole chain down to base then back up to head.
+
+    Confirms every revision (including each agent-kanban a1..a8 plus the
+    later additions) is independently reversible. Originally only counted
+    ``len(AGENT_KANBAN_REVS)`` downgrade steps, which left later revs above
+    a8 unwalked and therefore did not exercise a1..a8 at all once the chain
+    grew past a8.
+    """
+    head = _current_head_revision()
     res = _alembic("upgrade", "head")
     assert res.returncode == 0, res.stderr
 
-    # Walk the chain downward, then back up. Each step must succeed.
-    for _ in range(len(AGENT_KANBAN_REVS)):
-        down = _alembic("downgrade", "-1")
-        assert down.returncode == 0, down.stderr
+    down = _alembic("downgrade", "base")
+    assert down.returncode == 0, down.stderr
 
     up = _alembic("upgrade", "head")
     assert up.returncode == 0, up.stderr
     final = _alembic("current")
-    assert "a4_agent_kanban" in final.stdout + final.stderr
+    assert head in final.stdout + final.stderr
 
 
 def test_new_tables_exist_at_head():
@@ -116,12 +144,16 @@ def test_new_tables_exist_at_head():
     assert res.returncode == 0, res.stderr
 
     names = asyncio.run(_fetch_table_names())
-    assert "tickets" in names
+    assert "problems" in names  # bulletin table
     assert "agent_accounts" in names
     assert "audit_log" in names
+    # Step 3: work_items renamed to tickets; legacy ticket_* tables are
+    # gone and the work_item_* tables took their names.
+    assert "tickets" in names
+    assert "ticket_comments" in names
     assert "ticket_transitions" in names
     assert "ticket_links" in names
-    assert "problems" not in names  # renamed
+    assert "work_items" not in names
 
 
 def test_search_indexes_present_at_head():

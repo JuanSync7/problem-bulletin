@@ -46,3 +46,51 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["app*"]
 exclude = ["frontend*", "tests*", "alembic*", "docs*", "scripts*"]
+
+# ---------------------------------------------------------------------------
+# mypy config (v2.19-WP02 P1)
+# ---------------------------------------------------------------------------
+# Pragmatic, minimal config -- pairs with
+# ``tests/test_typecheck_lint_v219_wp02.py`` which PINs the current offender
+# set with BY-DESIGN / LEGACY classification.
+#
+# Choices:
+#   * ``python_version = "3.12"`` -- matches the ``.venv`` runtime.
+#   * No ``strict`` mode -- we PIN-and-fix-forward, not bulk-tighten.
+#   * ``pydantic.mypy`` plugin ENABLED (v2.20-WP02). The v2.19-WP02 diagnosis
+#     disabled it after observing that ``import pydantic.mypy`` from a raw
+#     Python REPL raised ``AttributeError: module 'mypy.expandtype' has no
+#     attribute 'ExpandTypeVisitor'``. v2.20-WP01 recon
+#     (``.claude/lessons-learned/v2.20-wp01-diagnosis.md``) showed that
+#     raw-import failure is a red herring -- when loaded via mypy itself,
+#     the plugin works cleanly under mypy 1.20.1 + pydantic 2.13.0,
+#     eliminating 32 errors purely additively (0 new errors). See
+#     ``.claude/lessons-learned/v2.20-wp02-diagnosis.md`` for closure.
+#   * Per-module ``ignore_missing_imports = true`` for ``jose`` and
+#     ``authlib`` -- no published stubs; suppressing per-module rather than
+#     littering inline pragmas (which would inflate the v2.17-WP03 allow-list).
+#   * ``warn_unused_ignores = true`` -- keeps the existing
+#     ``# type: ignore`` allow-list (v2.17-WP03) honest by failing loud if
+#     an inline ignore becomes redundant.
+#   * ``exclude`` -- mypy only runs over ``app/``; ``tests/`` and ``scripts/``
+#     stay opt-in for a future WP.
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+follow_imports = "silent"
+warn_unused_ignores = true
+warn_redundant_casts = true
+exclude = ["alembic/", "tests/", "scripts/"]
+
+[[tool.mypy.overrides]]
+module = ["jose", "jose.*", "authlib", "authlib.*"]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------------------
+# pytest config
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests that invoke external tooling (e.g. mypy subprocess), >1s warm-cache runtime",
+]

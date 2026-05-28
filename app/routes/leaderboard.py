@@ -9,6 +9,7 @@ from enum import Enum
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -26,7 +27,26 @@ class Track(str, Enum):
     reporters = "reporters"
 
 
-@router.get("/leaderboard")
+class LeaderboardEntry(BaseModel):
+    """One row in the leaderboard. ``extra='allow'`` because the row
+    carries a track-specific score column (``accepted_count`` for solvers,
+    ``upstar_count`` for reporters) — the frontend (`pages/Leaderboard.tsx`)
+    reads any of them via a fallback chain."""
+
+    model_config = ConfigDict(extra="allow")
+
+    user_id: str
+    display_name: str
+    rank: int
+
+
+class LeaderboardResponse(BaseModel):
+    track: str
+    period: str
+    entries: list[LeaderboardEntry]
+
+
+@router.get("/leaderboard", response_model=LeaderboardResponse)
 async def leaderboard(
     track: Track = Query(Track.solvers),
     period: TimePeriod = Query(TimePeriod.all_time),

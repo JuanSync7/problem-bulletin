@@ -18,6 +18,7 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.sql.elements import conv  # v2.12-WP08: short-circuit ck convention
 
 
 revision: str = "a1_agent_kanban"
@@ -148,41 +149,42 @@ def upgrade() -> None:
         sa.Column("key", sa.Text(), nullable=True),
     )
 
-    # 4. Check constraints.
+    # 4. Check constraints. v2.12-WP08: wrap with conv() to short-circuit
+    # the ``ck`` naming-convention template now pinned on Base.metadata.
     op.create_check_constraint(
-        "ck_tickets_assignee_pair",
+        conv("ck_tickets_assignee_pair"),
         "tickets",
         "(assignee_id IS NULL AND assignee_type IS NULL) OR "
         "(assignee_id IS NOT NULL AND assignee_type IS NOT NULL)",
     )
     op.create_check_constraint(
-        "ck_tickets_assignee_type",
+        conv("ck_tickets_assignee_type"),
         "tickets",
         "assignee_type IS NULL OR assignee_type IN ('user','agent')",
     )
     op.create_check_constraint(
-        "ck_tickets_reporter_type",
+        conv("ck_tickets_reporter_type"),
         "tickets",
         "reporter_type IS NULL OR reporter_type IN ('user','agent')",
     )
     op.create_check_constraint(
-        "ck_tickets_custom_fields_object",
+        conv("ck_tickets_custom_fields_object"),
         "tickets",
         "jsonb_typeof(custom_fields) = 'object'",
     )
     op.create_check_constraint(
-        "ck_tickets_hierarchy_no_self",
+        conv("ck_tickets_hierarchy_no_self"),
         "tickets",
         "parent_id IS NULL OR parent_id <> id",
     )
 
 
 def downgrade() -> None:
-    op.drop_constraint("ck_tickets_hierarchy_no_self", "tickets", type_="check")
-    op.drop_constraint("ck_tickets_custom_fields_object", "tickets", type_="check")
-    op.drop_constraint("ck_tickets_reporter_type", "tickets", type_="check")
-    op.drop_constraint("ck_tickets_assignee_type", "tickets", type_="check")
-    op.drop_constraint("ck_tickets_assignee_pair", "tickets", type_="check")
+    op.drop_constraint(conv("ck_tickets_hierarchy_no_self"), "tickets", type_="check")
+    op.drop_constraint(conv("ck_tickets_custom_fields_object"), "tickets", type_="check")
+    op.drop_constraint(conv("ck_tickets_reporter_type"), "tickets", type_="check")
+    op.drop_constraint(conv("ck_tickets_assignee_type"), "tickets", type_="check")
+    op.drop_constraint(conv("ck_tickets_assignee_pair"), "tickets", type_="check")
 
     op.drop_column("tickets", "key")
     op.drop_column("tickets", "deleted_at")

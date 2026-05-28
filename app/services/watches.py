@@ -46,6 +46,10 @@ async def set_watch(
     result = await db.execute(stmt)
     watch = result.scalar_one()
     await db.flush()
+    # SQLAlchemy's identity map can return the row in its pre-upsert state
+    # when this is the second call for the same (user_id, problem_id).
+    # Refresh so callers see the post-write ``.level``.  v2.11-WP04 A6.
+    await db.refresh(watch)
     return watch
 
 

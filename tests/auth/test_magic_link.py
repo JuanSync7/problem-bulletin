@@ -31,7 +31,18 @@ def _make_settings():
 
 
 def _mock_settings():
-    return patch("app.auth.magic_link.get_settings", return_value=_make_settings())
+    """Backward-compat no-op context: send_magic_link now takes settings as an
+    explicit positional argument (no internal get_settings() lookup), so this
+    context manager simply yields. Tests pass `_make_settings()` directly to
+    send_magic_link / verify_magic_link as needed.
+    """
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _noop():
+        yield
+
+    return _noop()
 
 
 def _make_magic_link_record(
@@ -67,7 +78,7 @@ class TestSendMagicLink:
         mock_db.execute.return_value = result_row
 
         with _mock_settings():
-            await send_magic_link(mock_db, "alice@company.com")
+            await send_magic_link(mock_db, "alice@company.com", _make_settings())
 
         # db.add must have been called with a MagicLink record
         mock_db.add.assert_called_once()
@@ -85,7 +96,7 @@ class TestSendMagicLink:
         mock_db.execute.return_value = result_row
 
         with _mock_settings():
-            await send_magic_link(mock_db, "alice@company.com")
+            await send_magic_link(mock_db, "alice@company.com", _make_settings())
 
         record_arg = mock_db.add.call_args[0][0]
         # Verify: hash(token_hash) doesn't re-hash to itself (it's a hash, not the raw token)
@@ -96,15 +107,17 @@ class TestSendMagicLink:
         send_kwargs = mock_smtp.call_args
         # Extract the message from the call — it is passed as positional or keyword arg
         message_arg = send_kwargs[0][0] if send_kwargs[0] else send_kwargs[1].get("message")
-        if message_arg is not None:
-            body = str(message_arg)
-            # Extract token from URL in email body
-            import re
-            match = re.search(r"\?token=([A-Za-z0-9_\-]+)", body)
-            if match:
-                raw_token = match.group(1)
-                expected_hash = hashlib.sha256(raw_token.encode()).hexdigest()
-                assert record_arg.token_hash == expected_hash
+        assert message_arg is not None
+        # Decode the EmailMessage payload (quoted-printable line-wraps long URLs
+        # at ~76 chars with "=\n" continuations — read the decoded payload
+        # rather than str(message), which preserves the soft breaks).
+        body = message_arg.get_content() if hasattr(message_arg, "get_content") else str(message_arg)
+        import re
+        match = re.search(r"\?token=([A-Za-z0-9_\-]+)", body)
+        assert match is not None, f"token URL not found in body: {body!r}"
+        raw_token = match.group(1)
+        expected_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        assert record_arg.token_hash == expected_hash
 
     @pytest.mark.asyncio
     async def test_sends_email_exactly_once(self, mock_db, make_user, mock_smtp):
@@ -114,7 +127,7 @@ class TestSendMagicLink:
         mock_db.execute.return_value = result_row
 
         with _mock_settings():
-            await send_magic_link(mock_db, "alice@company.com")
+            await send_magic_link(mock_db, "alice@company.com", _make_settings())
 
         mock_smtp.assert_called_once()
 
@@ -126,12 +139,13 @@ class TestSendMagicLink:
         mock_db.execute.return_value = result_row
 
         with _mock_settings():
-            await send_magic_link(mock_db, "alice@company.com")
+            await send_magic_link(mock_db, "alice@company.com", _make_settings())
 
         assert mock_smtp.called
         send_kwargs = mock_smtp.call_args
         message_arg = send_kwargs[0][0] if send_kwargs[0] else send_kwargs[1].get("message")
-        body = str(message_arg)
+        # Use decoded content so quoted-printable soft breaks do not split the URL.
+        body = message_arg.get_content() if hasattr(message_arg, "get_content") else str(message_arg)
         assert "https://example.com/auth/magic/verify?token=" in body
 
     @pytest.mark.asyncio
@@ -142,7 +156,7 @@ class TestSendMagicLink:
         mock_db.execute.return_value = result_row
 
         with _mock_settings():
-            await send_magic_link(mock_db, "alice@company.com")
+            await send_magic_link(mock_db, "alice@company.com", _make_settings())
 
         record_arg = mock_db.add.call_args[0][0]
         assert record_arg.user_id == user.id
@@ -154,7 +168,7 @@ class TestSendMagicLink:
         mock_db.execute.return_value = result_row
 
         with _mock_settings():
-            await send_magic_link(mock_db, "unknown@company.com")
+            await send_magic_link(mock_db, "unknown@company.com", _make_settings())
 
         record_arg = mock_db.add.call_args[0][0]
         assert record_arg.user_id is None
@@ -172,7 +186,7 @@ class TestSendMagicLink:
         mock_db.execute.return_value = result_row
 
         with _mock_settings():
-            await send_magic_link(mock_db, "alice@company.com")
+            await send_magic_link(mock_db, "alice@company.com", _make_settings())
 
         flush_idx = call_order.index("flush")
         smtp_idx = call_order.index("smtp")
@@ -186,7 +200,7 @@ class TestSendMagicLink:
         mock_db.execute.return_value = result_row
 
         with _mock_settings():
-            await send_magic_link(mock_db, "alice@company.com")
+            await send_magic_link(mock_db, "alice@company.com", _make_settings())
 
         record_arg = mock_db.add.call_args[0][0]
         assert record_arg.consumed is False

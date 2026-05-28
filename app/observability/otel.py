@@ -14,6 +14,7 @@ app continues to run — instrumentation must be best-effort (NFR-906).
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,29 @@ logger = logging.getLogger(__name__)
 
 # Sentinel so tests / repeated calls don't double-instrument.
 _INSTRUMENTED = False
+
+
+def _in_test_mode() -> bool:
+    """Detect whether we are running under pytest.
+
+    v2.15-WP04 (C3): when running under pytest, the
+    ``PeriodicExportingMetricReader`` paired with either ``ConsoleMetricExporter``
+    (writes to pytest-captured/torn-down stdout) or ``OTLPMetricExporter``
+    (tries to gRPC-connect to a non-existent localhost:4317 collector) produces
+    two noisy traceback patterns in stderr:
+
+    * ``ValueError: I/O operation on closed file`` — console writer firing
+      after pytest closes the captured stream.
+    * ``failed to connect to all addresses ... localhost:4317`` — gRPC retry
+      against a collector that does not exist in the test environment.
+
+    Both stem from the *metric* exporter's periodic background thread. Detecting
+    pytest via ``PYTEST_CURRENT_TEST`` lets us swap to an in-memory metric
+    reader that has no background thread and no I/O, eliminating the noise
+    without disturbing production behaviour or the span-exporter assertions in
+    ``tests/observability/test_otel_init.py``.
+    """
+    return "PYTEST_CURRENT_TEST" in os.environ
 
 
 def setup_otel(app: Any, settings: Any) -> bool:
@@ -88,27 +112,41 @@ def setup_otel(app: Any, settings: Any) -> bool:
         trace.set_tracer_provider(tracer_provider)
 
         # ---- Meter provider ---------------------------------------------------
-        if endpoint:
-            try:
-                from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (
-                    OTLPMetricExporter,
-                )
+        # v2.15-WP04: under pytest, swap the PeriodicExportingMetricReader for
+        # an in-memory reader. The periodic reader spawns a background thread
+        # that fires Console/OTLP exports during/after pytest teardown,
+        # producing "I/O operation on closed file" and "localhost:4317
+        # ConnectionRefused" noise in stderr. The in-memory reader has no
+        # thread and no I/O. See _in_test_mode() above.
+        metric_readers: list[Any]
+        if _in_test_mode():
+            from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 
-                metric_exporter: Any = OTLPMetricExporter(
-                    endpoint=endpoint, insecure=True
-                )
-            except Exception as exc:  # pragma: no cover - import/runtime guard
-                logger.warning(
-                    "OTLP metric exporter unavailable (%s); falling back to console",
-                    exc,
-                )
-                metric_exporter = ConsoleMetricExporter()
+            metric_readers = [InMemoryMetricReader()]
         else:
-            metric_exporter = ConsoleMetricExporter()
+            if endpoint:
+                try:
+                    from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (
+                        OTLPMetricExporter,
+                    )
+
+                    metric_exporter: Any = OTLPMetricExporter(
+                        endpoint=endpoint, insecure=True
+                    )
+                except Exception as exc:  # pragma: no cover - import/runtime guard
+                    logger.warning(
+                        "OTLP metric exporter unavailable (%s); falling back to console",
+                        exc,
+                    )
+                    metric_exporter = ConsoleMetricExporter()
+            else:
+                metric_exporter = ConsoleMetricExporter()
+
+            metric_readers = [PeriodicExportingMetricReader(metric_exporter)]
 
         meter_provider = MeterProvider(
             resource=resource,
-            metric_readers=[PeriodicExportingMetricReader(metric_exporter)],
+            metric_readers=metric_readers,
         )
         metrics.set_meter_provider(meter_provider)
 

@@ -1,12 +1,15 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { useAnonymousMode } from "../hooks/useAnonymousMode";
 import { useToast } from "../contexts/ToastContext";
-import MarkdownEditor from "../components/MarkdownEditor";
 import TagAutocomplete from "../components/TagAutocomplete";
 import AttachmentDropZone from "../components/AttachmentDropZone";
+import { parseApiError } from "../api/errors";
+import "../styles/form-field.css";
 import "./Submit.css";
+
+const RichEditor = lazy(() => import("../components/RichEditor"));
 
 interface Category {
   id: string;
@@ -88,8 +91,11 @@ export default function Submit() {
           const data: Category[] = await res.json();
           setCategories(data);
         }
-      } catch {
-        // Categories will remain empty; user sees empty dropdown
+      } catch (err) {
+        if (!cancelled) {
+          const message = err instanceof Error ? err.message : "Failed to load categories";
+          toast.show(`Could not load categories: ${message}`, "error");
+        }
       }
     }
     fetchCategories();
@@ -99,8 +105,11 @@ export default function Submit() {
         if (res.ok && !cancelled) {
           setDomains(await res.json());
         }
-      } catch {
-        // ignore
+      } catch (err) {
+        if (!cancelled) {
+          const message = err instanceof Error ? err.message : "Failed to load domains";
+          toast.show(`Could not load domains: ${message}`, "error");
+        }
       }
     }
     fetchDomains();
@@ -161,10 +170,11 @@ export default function Submit() {
         });
 
         if (!res.ok) {
-          const body = await res
-            .json()
-            .catch(() => ({ message: "Failed to submit problem" }));
-          throw new Error(body.message || "Failed to submit problem");
+          // v2.14-WP04: structured-envelope-aware parsing — was reading
+          // body.message directly which only worked for legacy shapes.
+          const body = await res.json().catch(() => null);
+          const parsed = parseApiError(res, body);
+          throw new Error(parsed.message || "Failed to submit problem");
         }
 
         const problem = await res.json();
@@ -284,15 +294,17 @@ export default function Submit() {
           <label className="form-field__label">
             Description<span className="form-field__required">*</span>
           </label>
-          <MarkdownEditor
-            value={description}
-            onChange={(val) => {
-              setDescription(val);
-              if (!touched.description) markTouched("description");
-            }}
-            placeholder="Describe the problem in detail. Markdown is supported."
-            minLength={10}
-          />
+          <Suspense fallback={<div className="problem-detail__editor-loading">Loading editor…</div>}>
+            <RichEditor
+              value={description}
+              onChange={(val) => {
+                setDescription(val);
+                if (!touched.description) markTouched("description");
+              }}
+              minHeight="20rem"
+              placeholder="Describe the problem in detail."
+            />
+          </Suspense>
           {errors.description && (
             <span className="form-field__error">{errors.description}</span>
           )}

@@ -1,7 +1,15 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { AdminRouteGuard } from "../../components/AdminRouteGuard";
 import { useToast } from "../../contexts/ToastContext";
+import { parseApiError } from "../../api/errors";
 import "./Admin.css";
+
+// v2.14-WP04: throw with backend's parsed envelope message.
+async function throwParsed(res: Response, fallback: string): Promise<never> {
+  const body = await res.json().catch(() => null);
+  const parsed = parseApiError(res, body);
+  throw new Error(parsed.message || fallback);
+}
 
 interface FlaggedItem {
   id: string;
@@ -23,11 +31,14 @@ function ModerationContent() {
       const res = await fetch("/api/admin/moderation/flags", {
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to fetch flagged items");
+      if (!res.ok) await throwParsed(res, "Failed to fetch flagged items");
       const data: FlaggedItem[] = await res.json();
       setItems(data);
-    } catch {
-      toast.show("Failed to load flagged items", "error");
+    } catch (err) {
+      toast.show(
+        err instanceof Error ? err.message : "Failed to load flagged items",
+        "error",
+      );
     } finally {
       setLoading(false);
     }
@@ -43,11 +54,14 @@ function ModerationContent() {
         method: "POST",
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to resolve flag");
+      if (!res.ok) await throwParsed(res, "Failed to resolve flag");
       toast.show("Flag resolved", "success");
       await fetchFlags();
-    } catch {
-      toast.show("Failed to resolve flag", "error");
+    } catch (err) {
+      toast.show(
+        err instanceof Error ? err.message : "Failed to resolve flag",
+        "error",
+      );
     }
   }
 
@@ -57,12 +71,15 @@ function ModerationContent() {
         method: "POST",
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to de-anonymize");
+      if (!res.ok) await throwParsed(res, "Failed to de-anonymize");
       setConfirmDeAnon(null);
       toast.show("Content de-anonymized", "success");
       await fetchFlags();
-    } catch {
-      toast.show("Failed to de-anonymize content", "error");
+    } catch (err) {
+      toast.show(
+        err instanceof Error ? err.message : "Failed to de-anonymize content",
+        "error",
+      );
     }
   }
 

@@ -44,17 +44,26 @@ class AgentAccountService:
         session: AsyncSession,
         *,
         name: str,
+        created_by: UUID,
         scopes: Sequence[str] | None = None,
         description: str | None = None,
-        created_by: UUID | None = None,
     ) -> tuple[AgentAccount, str]:
         """Create an agent account and return ``(account, plaintext_key)``.
 
         The plaintext key is returned ONCE here and is not stored anywhere.
         Re-issue requires creating a new account (or revoking + recreating).
+
+        ``created_by`` is required (v2.11-WP01) — migration ``a17`` enforces
+        NOT NULL at the DB layer and we now guard the precondition at the
+        service boundary so callers get a clear ``ValidationError`` instead
+        of a confusing ``IntegrityError`` from the flush.
         """
         if not name or not name.strip():
             raise ValidationError([{"name": "name", "reason": "required"}])
+        if created_by is None:
+            raise ValidationError(
+                [{"name": "created_by", "reason": "required"}]
+            )
 
         plaintext = _generate_key()
         prefix = plaintext[:_PREFIX_LEN]

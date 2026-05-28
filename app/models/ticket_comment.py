@@ -1,16 +1,11 @@
-"""TicketComment model — append-only comment journal for tickets.
-
-Maps to the ``ticket_comments`` table created in migration ``a5_agent_kanban``.
-This is the agent-kanban replacement for the legacy ``comments`` table; rows
-here are immutable (no UPDATE/DELETE in service code).
-"""
+"""TicketComment model — append-only comment journal for tickets."""
 from __future__ import annotations
 
 from datetime import datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Text, func
-from sqlalchemy.dialects.postgresql import UUID as PgUUID
+from sqlalchemy.dialects.postgresql import ARRAY, UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -21,7 +16,11 @@ class TicketComment(Base):
     __table_args__ = (
         CheckConstraint(
             "author_type IN ('user','agent')",
-            name="ticket_comments_author_type_check",
+            name="author_type",
+        ),
+        CheckConstraint(
+            "author_type = 'agent' OR agent_step_id IS NULL",
+            name="agent_step_id",
         ),
         {"extend_existing": True},
     )
@@ -41,8 +40,18 @@ class TicketComment(Base):
     author_type: Mapped[str] = mapped_column(Text, nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     correlation_id: Mapped[str] = mapped_column(
-        Text, nullable=False, default="", server_default="",
+        Text, nullable=False, default="", server_default=""
+    )
+    agent_step_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Soft references — UUIDs of users or agents @-mentioned in body. No
+    # FK because mentions may resolve to either users or agents (no
+    # single target table) and notification delivery is a v2.1 concern.
+    mentions: Mapped[list[UUID]] = mapped_column(
+        ARRAY(PgUUID(as_uuid=True)),
+        nullable=False,
+        default=list,
+        server_default="{}",
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now(),
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )

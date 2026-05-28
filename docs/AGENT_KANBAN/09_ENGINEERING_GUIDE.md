@@ -929,6 +929,88 @@ From `STATE.md`:
 
 ---
 
+---
+
+## WP24 — POST /projects admin-only + PATCH /users/me/handle
+
+### Spec
+
+**Part A — POST /projects admin gate**
+`project_service.create()` gains an optional `acting_user` parameter. When
+supplied and the user is not an admin (`role != UserRole.admin`),
+`PermissionDeniedError("Only admins can create projects")` is raised.  The
+POST handler in `app/routes/projects.py` now injects `current_user: CurrentUser`
+and passes it to the service. The global `PermissionDeniedError → 403` handler
+in `app/main.py` fires automatically.
+
+`acting_user` defaults to `None` so existing service-layer tests that call
+`project_service.create()` directly (without a user) continue to work without
+modification — internal callers are trusted.
+
+**Part B — PATCH /api/v1/users/me/handle**
+New `HandleUpdate` Pydantic schema (`app/schemas/users.py`) with validators:
+length 3–32, `^[a-z0-9_]+$`, no leading `_` or digit, reserved-word rejection
+(module-level `RESERVED_HANDLES` frozenset). Input is lowercased server-side
+before all checks.
+
+New `update_handle(session, user_id, new_handle) -> User` function
+(`app/services/users.py`) applies the same validation as defence-in-depth, does
+a `SELECT ... WHERE handle = :h AND id != :uid` uniqueness check, and raises
+`HandleTakenError` (new — `app/services/exceptions.py`) if taken. Otherwise
+issues `UPDATE users SET handle = :h WHERE id = :id` and returns the refreshed
+row.
+
+New `app/routes/users.py` router mounted at `/api/v1/users`. Single endpoint
+`PATCH /me/handle` → 200 user object / 422 (Pydantic) / 409 (HandleTakenError
+via global handler added to `app/main.py`) / 401 (CurrentUser dep).
+
+### Files touched (backend)
+
+| File | Change |
+|------|--------|
+| `app/services/exceptions.py` | Added `HandleTakenError` |
+| `app/services/projects.py` | `create()` accepts `acting_user`, raises `PermissionDeniedError` for non-admins |
+| `app/services/users.py` | New — `update_handle()` |
+| `app/schemas/users.py` | New — `HandleUpdate`, `RESERVED_HANDLES` |
+| `app/routes/projects.py` | POST handler injects `CurrentUser`, passes to service |
+| `app/routes/users.py` | New — `PATCH /v1/users/me/handle` |
+| `app/main.py` | Imports + mounts `users_router`; adds `HandleTakenError → 409` handler |
+| `tests/routes/test_projects_permissions.py` | Updated 2 existing fixtures (now create via admin); added 2 new tests for admin gate |
+| `tests/routes/test_users_handle.py` | New — 16 tests (happy path, idempotent, format/length/reserved 422, conflict 409, unauth 401, uppercase normalisation) |
+
+### Tests
+
+- New tests added: **18** (2 POST /projects admin gate + 16 handle endpoint).
+- Baseline failures before WP24: 306. After: 306 (zero regressions).
+- All 40 targeted tests (`test_projects_permissions`, `test_users_handle`,
+  `test_projects_service`) pass green.
+
+### Lessons
+
+- `acting_user=None` default on `create()` is the right escape hatch for
+  internal/service-layer callers; avoids polluting 8 call sites.
+- Server-side lowercasing before Pydantic regex validation means `UPPERCASE`
+  input succeeds (normalised to lowercase) — tested explicitly in
+  `test_patch_handle_uppercase_input_normalised`. Test suite initially listed
+  `UPPERCASE` as an invalid-format case; corrected to reflect the design.
+- `HandleTakenError` as a checked exception (not an HTTP raise) keeps the
+  service layer transport-agnostic; the global handler in `main.py` maps it
+  to 409.
+- Profanity filter deferred to v2.4 if abuse surfaces (noted per spec).
+
+### Follow-ups (v2.4)
+
+- **UI for handle editing**: settings page exposing `PATCH /api/v1/users/me/handle`. No FE changes in this WP.
+- **Audit log**: `update_handle` should emit an audit event when the audit
+  service is extended to cover user-profile mutations.
+- **Profanity filter**: reserved-word list is deliberately minimal; a
+  third-party word list or service call can be added in v2.4 if needed.
+- **Rate-limit handle changes**: prevent rapid churn (e.g. max 2 changes per 24 h).
+- **Admin override handle**: admin-only `PATCH /api/v1/users/{id}/handle` for
+  moderation use cases.
+
+---
+
 ## 15. Cross-references
 
 | Topic                        | Spec / design |

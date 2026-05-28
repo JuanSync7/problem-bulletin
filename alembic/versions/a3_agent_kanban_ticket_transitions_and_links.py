@@ -9,6 +9,7 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.sql.elements import conv  # v2.12-WP08: short-circuit ck convention
 
 
 revision: str = "a3_agent_kanban"
@@ -56,7 +57,7 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "actor_type IN ('user','agent')",
-            name="ck_ticket_transitions_actor_type",
+            name=conv("ck_ticket_transitions_actor_type"),
         ),
     )
     op.create_index(
@@ -112,11 +113,11 @@ def upgrade() -> None:
             name="uq_ticket_links",
         ),
         sa.CheckConstraint(
-            "source_id <> target_id", name="ck_ticket_links_no_self"
+            "source_id <> target_id", name=conv("ck_ticket_links_no_self")
         ),
         sa.CheckConstraint(
             "created_by_type IN ('user','agent')",
-            name="ck_ticket_links_created_by_type",
+            name=conv("ck_ticket_links_created_by_type"),
         ),
     )
     op.create_index("ix_ticket_links_source", "ticket_links", ["source_id"])

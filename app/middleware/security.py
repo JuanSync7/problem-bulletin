@@ -94,7 +94,7 @@ def _clean_attrs(attrs: str) -> str:
     return attrs
 
 
-def _replace_tag(match: re.Match) -> str:  # type: ignore[type-arg]
+def _replace_tag(match: re.Match[str]) -> str:
     slash_open = match.group(1)   # "/" for closing tags, "" otherwise
     tag_name = match.group(2).lower()
     attrs = match.group(3)

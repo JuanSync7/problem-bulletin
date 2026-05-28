@@ -13,6 +13,7 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.sql.elements import conv  # v2.12-WP08: short-circuit ck convention
 
 
 revision: str = "a2_agent_kanban"
@@ -96,7 +97,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
         ),
         sa.CheckConstraint(
-            "actor_type IN ('user','agent')", name="ck_audit_log_actor_type"
+            "actor_type IN ('user','agent')", name=conv("ck_audit_log_actor_type")
         ),
     )
     op.create_index(

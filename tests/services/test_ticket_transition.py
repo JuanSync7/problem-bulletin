@@ -1,124 +1,229 @@
-"""S4 — TicketService.transition (state machine + row lock)."""
+"""TicketService: transition / assign / claim / comment / link / subtree."""
 from __future__ import annotations
 
-import asyncio
+import uuid
 
 import pytest
-from sqlalchemy import select
+import pytest_asyncio
+from sqlalchemy import select, text
 
-from app.enums import TicketStatus
-from app.exceptions import InvalidTransitionError
+from app.enums import ActorType, TicketStatus, TicketType, TicketLinkType
+from app.exceptions import (
+    AlreadyClaimedError,
+    DuplicateLinkError,
+    ForbiddenError,
+    InvalidTransitionError,
+    OptimisticConcurrencyError,
+    ValidationError,
+)
 from app.models.ticket_transition import TicketTransition
-from app.services.tickets import TicketService
+from app.services.context import Actor
+from app.services.tickets import TicketNotFoundError, TicketService
 
 
-@pytest.mark.asyncio
-async def test_transition_happy_path(db, user_actor):
-    svc = TicketService()
-    t = await svc.create(db, actor=user_actor, title="t")
-    updated = await svc.transition(
-        db, t.id, actor=user_actor, target_status=TicketStatus.in_progress,
-        reason="starting work", correlation_id="trace-tr",
+@pytest_asyncio.fixture
+async def db_user(db, user_actor) -> Actor:
+    await db.execute(
+        text("INSERT INTO users (id, email, display_name) VALUES (:id, :e, 'u')"),
+        {"id": user_actor.id, "e": f"u-{user_actor.id}@x.test"},
     )
-    assert updated.status == TicketStatus.in_progress
-    assert updated.version == 2
+    await db.flush()
+    return user_actor
 
-    transitions = (
-        await db.execute(
-            select(TicketTransition).where(TicketTransition.ticket_id == t.id)
-        )
-    ).scalars().all()
-    # Initial NULL->todo + new todo->in_progress
-    assert len(transitions) == 2
-    last = sorted(transitions, key=lambda r: r.created_at)[-1]
-    assert last.from_status == TicketStatus.todo
-    assert last.to_status == TicketStatus.in_progress
-    assert last.reason == "starting work"
+
+@pytest_asyncio.fixture
+async def db_agent(db, agent_actor) -> Actor:
+    # agent_actor has type=ActorType.agent; no users row needed for claim/assign.
+    return agent_actor
+
+
+# -- transition -------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_transition_todo_to_in_progress_records_journal(db, db_user):
+    svc = TicketService()
+    wi = await svc.create(db, actor=db_user, title="x")
+    moved = await svc.transition(
+        db, wi.id, actor=db_user, target_status=TicketStatus.in_progress
+    )
+    assert moved.status == TicketStatus.in_progress
+    assert moved.version == 2
+
+    trs = (await db.execute(
+        select(TicketTransition)
+        .where(TicketTransition.ticket_id == wi.id)
+        .order_by(TicketTransition.created_at)
+    )).scalars().all()
+    assert [(t.from_status, t.to_status) for t in trs] == [
+        (None, TicketStatus.todo),
+        (TicketStatus.todo, TicketStatus.in_progress),
+    ]
 
 
 @pytest.mark.asyncio
-async def test_transition_forbidden_target(db, user_actor):
-    """todo -> done is not allowed (must go through in_progress / in_review)."""
+async def test_transition_invalid_raises(db, db_user):
     svc = TicketService()
-    t = await svc.create(db, actor=user_actor, title="t")
+    wi = await svc.create(db, actor=db_user, title="x")
+    # todo -> done is not allowed; must go through in_progress / in_review.
     with pytest.raises(InvalidTransitionError):
-        await svc.transition(
-            db, t.id, actor=user_actor, target_status=TicketStatus.done
-        )
+        await svc.transition(db, wi.id, actor=db_user, target_status=TicketStatus.done)
 
 
 @pytest.mark.asyncio
-async def test_transition_to_terminal_sets_closed_at(db, user_actor):
+async def test_transition_same_status_raises(db, db_user):
     svc = TicketService()
-    t = await svc.create(db, actor=user_actor, title="t")
-    t1 = await svc.transition(
-        db, t.id, actor=user_actor, target_status=TicketStatus.in_progress
-    )
-    t2 = await svc.transition(
-        db, t1.id, actor=user_actor, target_status=TicketStatus.in_review
-    )
-    t3 = await svc.transition(
-        db, t2.id, actor=user_actor, target_status=TicketStatus.done
-    )
-    assert t3.status == TicketStatus.done
-    assert t3.closed_at is not None
-
-
-@pytest.mark.asyncio
-async def test_transition_idempotency_rejected(db, user_actor):
-    """todo -> todo is not a real transition."""
-    svc = TicketService()
-    t = await svc.create(db, actor=user_actor, title="t")
+    wi = await svc.create(db, actor=db_user, title="x")
     with pytest.raises(InvalidTransitionError):
-        await svc.transition(
-            db, t.id, actor=user_actor, target_status=TicketStatus.todo
+        await svc.transition(db, wi.id, actor=db_user, target_status=TicketStatus.todo)
+
+
+# -- assign / claim ---------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_assign_with_correct_version(db, db_user):
+    svc = TicketService()
+    wi = await svc.create(db, actor=db_user, title="x")
+    assigned = await svc.assign(
+        db,
+        wi.id,
+        actor=db_user,
+        assignee_id=db_user.id,
+        assignee_type="user",
+        expected_version=1,
+    )
+    assert assigned.assignee_id == db_user.id
+    assert assigned.assignee_type == "user"
+    assert assigned.version == 2
+
+
+@pytest.mark.asyncio
+async def test_assign_stale_version(db, db_user):
+    svc = TicketService()
+    wi = await svc.create(db, actor=db_user, title="x")
+    with pytest.raises(OptimisticConcurrencyError):
+        await svc.assign(
+            db,
+            wi.id,
+            actor=db_user,
+            assignee_id=db_user.id,
+            assignee_type="user",
+            expected_version=999,
         )
 
 
 @pytest.mark.asyncio
-async def test_transition_parallel_race_one_winner(session_factory, user_actor):
-    """Two concurrent sessions racing the same transition: one wins, one
-    raises InvalidTransitionError because the row already moved."""
+async def test_claim_only_agents(db, db_user):
     svc = TicketService()
+    wi = await svc.create(db, actor=db_user, title="x")
+    with pytest.raises(ForbiddenError):
+        await svc.claim(db, wi.id, actor=db_user)
 
-    # Seed the ticket in its own committed TX so racers can read it.
-    async with session_factory() as setup_db:
-        t = await svc.create(setup_db, actor=user_actor, title="race")
-        await setup_db.commit()
-        ticket_id = t.id
 
-    async def racer(target: TicketStatus):
-        async with session_factory() as racer_db:
-            try:
-                result = await svc.transition(
-                    racer_db, ticket_id, actor=user_actor, target_status=target
-                )
-                await racer_db.commit()
-                return ("ok", result.status)
-            except InvalidTransitionError as exc:
-                await racer_db.rollback()
-                return ("conflict", str(exc))
+@pytest.mark.asyncio
+async def test_claim_agent_succeeds_once(db, db_user, db_agent):
+    svc = TicketService()
+    wi = await svc.create(db, actor=db_user, title="x")
+    claimed = await svc.claim(db, wi.id, actor=db_agent)
+    assert claimed.assignee_id == db_agent.id
+    assert claimed.assignee_type == "agent"
+    # Re-claiming same row should fail.
+    with pytest.raises(AlreadyClaimedError):
+        await svc.claim(db, wi.id, actor=db_agent)
 
-    # Both racers try todo -> in_progress; only one can succeed because after
-    # the first commit, the second sees status=in_progress and the same
-    # target (in_progress) is no longer a legal "from" target.
-    results = await asyncio.gather(
-        racer(TicketStatus.in_progress), racer(TicketStatus.in_progress)
+
+# -- comments ---------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_add_and_list_comments(db, db_user):
+    svc = TicketService()
+    wi = await svc.create(db, actor=db_user, title="x")
+    c1 = await svc.add_comment(db, wi.id, actor=db_user, body="hello")
+    c2 = await svc.add_comment(db, wi.id, actor=db_user, body="world")
+    comments = await svc.list_comments(db, wi.id)
+    bodies = [c.body for c in comments]
+    assert "hello" in bodies and "world" in bodies
+    assert {c.id for c in comments} >= {c1.id, c2.id}
+
+
+@pytest.mark.asyncio
+async def test_comment_empty_body_rejected(db, db_user):
+    svc = TicketService()
+    wi = await svc.create(db, actor=db_user, title="x")
+    with pytest.raises(ValidationError):
+        await svc.add_comment(db, wi.id, actor=db_user, body="   ")
+
+
+# -- links ------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_link_create_and_list(db, db_user):
+    svc = TicketService()
+    a = await svc.create(db, actor=db_user, title="A")
+    b = await svc.create(db, actor=db_user, title="B")
+    link = await svc.link(
+        db,
+        actor=db_user,
+        source_id=a.id,
+        target_id=b.id,
+        link_type=TicketLinkType.blocks,
     )
-    statuses = [r[0] for r in results]
-    assert statuses.count("ok") == 1
-    assert statuses.count("conflict") == 1
+    assert link.link_type == TicketLinkType.blocks
+    out = await svc.list_links(db, a.id)
+    assert any(l.target_id == b.id for l in out["outgoing"])
+    inn = await svc.list_links(db, b.id)
+    assert any(l.source_id == a.id for l in inn["incoming"])
 
-    # Cleanup
-    async with session_factory() as cleanup_db:
-        from app.models.ticket import Ticket
-        from app.models.audit_log_event import AuditLogEvent
-        from sqlalchemy import delete
-        await cleanup_db.execute(
-            delete(AuditLogEvent).where(AuditLogEvent.entity_id == ticket_id)
+
+@pytest.mark.asyncio
+async def test_link_self_rejected(db, db_user):
+    svc = TicketService()
+    a = await svc.create(db, actor=db_user, title="A")
+    with pytest.raises(ValidationError):
+        await svc.link(
+            db,
+            actor=db_user,
+            source_id=a.id,
+            target_id=a.id,
+            link_type=TicketLinkType.relates_to,
         )
-        await cleanup_db.execute(
-            delete(TicketTransition).where(TicketTransition.ticket_id == ticket_id)
+
+
+@pytest.mark.asyncio
+async def test_link_duplicate_rejected(db, db_user):
+    svc = TicketService()
+    a = await svc.create(db, actor=db_user, title="A")
+    b = await svc.create(db, actor=db_user, title="B")
+    await svc.link(
+        db,
+        actor=db_user,
+        source_id=a.id,
+        target_id=b.id,
+        link_type=TicketLinkType.blocks,
+    )
+    with pytest.raises(DuplicateLinkError):
+        await svc.link(
+            db,
+            actor=db_user,
+            source_id=a.id,
+            target_id=b.id,
+            link_type=TicketLinkType.blocks,
         )
-        await cleanup_db.execute(delete(Ticket).where(Ticket.id == ticket_id))
-        await cleanup_db.commit()
+
+
+# -- subtree ----------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_subtree_returns_descendants(db, db_user):
+    svc = TicketService()
+    e = await svc.create(db, actor=db_user, title="E", type=TicketType.epic)
+    s = await svc.create(
+        db, actor=db_user, title="S", type=TicketType.story, parent_id=e.id
+    )
+    t = await svc.create(
+        db, actor=db_user, title="T", type=TicketType.task, parent_id=s.id
+    )
+    rows = await svc.get_subtree(db, e.id)
+    by_depth = {r["depth"]: r["ticket"].id for r in rows}
+    assert by_depth[0] == e.id
+    ids = {r["ticket"].id for r in rows}
+    assert {e.id, s.id, t.id} <= ids

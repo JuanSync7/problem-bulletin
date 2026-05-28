@@ -17,13 +17,19 @@ class TicketTransition(Base):
     __table_args__ = (
         CheckConstraint(
             "actor_type IN ('user','agent')",
-            name="ck_ticket_transitions_actor_type",
+            name="actor_type",
+        ),
+        CheckConstraint(
+            "actor_type = 'agent' OR agent_step_id IS NULL",
+            name="agent_step_id",
         ),
         {"extend_existing": True},
     )
 
     id: Mapped[UUID] = mapped_column(
-        PgUUID(as_uuid=True), primary_key=True, default=uuid4,
+        PgUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
         server_default=func.gen_random_uuid(),
     )
     ticket_id: Mapped[UUID] = mapped_column(
@@ -43,8 +49,9 @@ class TicketTransition(Base):
     actor_type: Mapped[str] = mapped_column(Text, nullable=False)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     correlation_id: Mapped[str] = mapped_column(
-        Text, nullable=False, default="", server_default="",
+        Text, nullable=False, default="", server_default=""
     )
+    agent_step_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now(),
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )

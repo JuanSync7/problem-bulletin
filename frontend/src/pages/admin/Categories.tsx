@@ -1,12 +1,22 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { AdminRouteGuard } from "../../components/AdminRouteGuard";
 import { useToast } from "../../contexts/ToastContext";
+import { parseApiError } from "../../api/errors";
 import "./Admin.css";
 
 interface Category {
   id: string;
   name: string;
   sortOrder: number;
+}
+
+// v2.14-WP04: shared helper — throw with the backend's structured-envelope
+// message (preserves code/correlation_id in the parsed payload even if
+// only the message currently reaches the toast surface).
+async function throwParsed(res: Response, fallback: string): Promise<never> {
+  const body = await res.json().catch(() => null);
+  const parsed = parseApiError(res, body);
+  throw new Error(parsed.message || fallback);
 }
 
 function CategoriesContent() {
@@ -21,11 +31,14 @@ function CategoriesContent() {
   const fetchCategories = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/categories", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch categories");
+      if (!res.ok) await throwParsed(res, "Failed to fetch categories");
       const data: Category[] = await res.json();
       setCategories(data);
-    } catch {
-      toast.show("Failed to load categories", "error");
+    } catch (err) {
+      toast.show(
+        err instanceof Error ? err.message : "Failed to load categories",
+        "error",
+      );
     } finally {
       setLoading(false);
     }
@@ -47,12 +60,15 @@ function CategoriesContent() {
         credentials: "include",
         body: JSON.stringify({ name: trimmed }),
       });
-      if (!res.ok) throw new Error("Failed to create category");
+      if (!res.ok) await throwParsed(res, "Failed to create category");
       setNewName("");
       toast.show("Category created", "success");
       await fetchCategories();
-    } catch {
-      toast.show("Failed to create category", "error");
+    } catch (err) {
+      toast.show(
+        err instanceof Error ? err.message : "Failed to create category",
+        "error",
+      );
     }
   }
 
@@ -67,12 +83,15 @@ function CategoriesContent() {
         credentials: "include",
         body: JSON.stringify({ name: trimmed }),
       });
-      if (!res.ok) throw new Error("Failed to update category");
+      if (!res.ok) await throwParsed(res, "Failed to update category");
       setEditingId(null);
       toast.show("Category updated", "success");
       await fetchCategories();
-    } catch {
-      toast.show("Failed to update category", "error");
+    } catch (err) {
+      toast.show(
+        err instanceof Error ? err.message : "Failed to update category",
+        "error",
+      );
     }
   }
 
@@ -82,12 +101,15 @@ function CategoriesContent() {
         method: "DELETE",
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to delete category");
+      if (!res.ok) await throwParsed(res, "Failed to delete category");
       setConfirmDeleteId(null);
       toast.show("Category deleted", "success");
       await fetchCategories();
-    } catch {
-      toast.show("Failed to delete category", "error");
+    } catch (err) {
+      toast.show(
+        err instanceof Error ? err.message : "Failed to delete category",
+        "error",
+      );
     }
   }
 
@@ -99,10 +121,13 @@ function CategoriesContent() {
         credentials: "include",
         body: JSON.stringify({ direction }),
       });
-      if (!res.ok) throw new Error("Failed to reorder");
+      if (!res.ok) await throwParsed(res, "Failed to reorder");
       await fetchCategories();
-    } catch {
-      toast.show("Failed to reorder category", "error");
+    } catch (err) {
+      toast.show(
+        err instanceof Error ? err.message : "Failed to reorder category",
+        "error",
+      );
     }
   }
 

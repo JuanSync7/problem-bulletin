@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from jose import jwt, JWTError
+from pydantic import SecretStr
 
 from app.auth.jwt import (
     create_access_token,
@@ -28,7 +29,9 @@ ACCESS_TOKEN_EXPIRE_HOURS = 8
 
 def _make_settings(secret=TEST_SECRET, environment="production"):
     s = MagicMock()
-    s.JWT_SECRET = secret
+    # Production code reads JWT_SECRET via .get_secret_value(); mirror the
+    # SecretStr contract here so the test mock matches production reality.
+    s.JWT_SECRET = SecretStr(secret) if not isinstance(secret, SecretStr) else secret
     s.ENVIRONMENT = environment
     return s
 

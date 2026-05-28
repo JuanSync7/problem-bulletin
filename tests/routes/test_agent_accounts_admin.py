@@ -4,27 +4,26 @@ from __future__ import annotations
 import uuid
 
 import pytest
-from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from app.database import get_db
 from app.enums import ActorType, UserRole
 from app.middleware.bearer_auth import get_admin_actor
 from app.models.user import User
-from app.routes.admin.agent_accounts import router as agent_accounts_router
 from app.services.context import Actor
+from tests.helpers.app_factory import build_test_app
 
 
 def _build_app(db_session, admin_actor: Actor):
-    app = FastAPI()
-    app.include_router(agent_accounts_router, prefix="/api")
-
     async def _override_db():
         yield db_session
 
-    app.dependency_overrides[get_db] = _override_db
-    app.dependency_overrides[get_admin_actor] = lambda: admin_actor
-    return app
+    return build_test_app(
+        dependency_overrides={
+            get_db: _override_db,
+            get_admin_actor: lambda: admin_actor,
+        }
+    )
 
 
 def _client(app):

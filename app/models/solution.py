@@ -1,5 +1,9 @@
+from __future__ import annotations
+
+from datetime import datetime
+from uuid import UUID as PyUUID
+
 from sqlalchemy import (
-    Column,
     Boolean,
     DateTime,
     ForeignKey,
@@ -11,7 +15,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
@@ -19,16 +23,34 @@ from app.database import Base
 class Solution(Base):
     __tablename__ = "solutions"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
-    problem_id = Column(
-        UUID(as_uuid=True), ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False
+    id: Mapped[PyUUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.gen_random_uuid(),
     )
-    author_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
-    status = Column(String, nullable=False, default="pending", server_default="pending")
-    is_anonymous = Column(Boolean, nullable=False, default=False, server_default=text("false"))
-    current_version_id = Column(UUID(as_uuid=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    problem_id: Mapped[PyUUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("problems.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    author_id: Mapped[PyUUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(
+        String, nullable=False, default="pending", server_default="pending"
+    )
+    is_anonymous: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    current_version_id: Mapped[PyUUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), onupdate=func.now()
+    )
 
     # Relationships
     problem = relationship("Problem", back_populates="solutions")
@@ -41,15 +63,25 @@ class Solution(Base):
 class SolutionVersion(Base):
     __tablename__ = "solution_versions"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
-    solution_id = Column(
-        UUID(as_uuid=True), ForeignKey("solutions.id", ondelete="CASCADE"), nullable=False
+    id: Mapped[PyUUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.gen_random_uuid(),
     )
-    version_number = Column(Integer, nullable=False)
-    description = Column(Text, nullable=False)
-    git_link = Column(String, nullable=True)
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    solution_id: Mapped[PyUUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("solutions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    git_link: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_by: Mapped[PyUUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
     solution = relationship("Solution", back_populates="versions")
     creator = relationship("User")
@@ -62,12 +94,22 @@ class SolutionVersion(Base):
 class SolutionUpvote(Base):
     __tablename__ = "solution_upvotes"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    solution_id = Column(
-        UUID(as_uuid=True), ForeignKey("solutions.id", ondelete="CASCADE"), nullable=False
+    id: Mapped[PyUUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.gen_random_uuid(),
     )
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    user_id: Mapped[PyUUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    solution_id: Mapped[PyUUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("solutions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
     user = relationship("User")
     solution = relationship("Solution", back_populates="upvotes")
