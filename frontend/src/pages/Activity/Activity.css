@@ -1,0 +1,275 @@
+/* Activity page styles — WP13 */
+
+.activity-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: var(--space-4, 1rem);
+  gap: var(--space-4, 1rem);
+}
+
+.activity-page__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 0.5rem);
+}
+
+.activity-page__title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text-primary, #1a1a1a);
+  margin: 0;
+}
+
+/* Tab strip */
+.activity-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--color-border, #e2e8f0);
+}
+
+.activity-tab {
+  padding: 0.5rem 1.25rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--color-text-secondary, #64748b);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.activity-tab:hover {
+  color: var(--color-text-primary, #1a1a1a);
+}
+
+.activity-tab--active {
+  color: var(--color-primary, #6366f1);
+  border-bottom-color: var(--color-primary, #6366f1);
+}
+
+/* Tab panel */
+.activity-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.activity-panel__stub {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--color-text-secondary, #64748b);
+  font-size: 1rem;
+  border: 1px dashed var(--color-border, #e2e8f0);
+  border-radius: 8px;
+}
+
+/* ----- Mentions tab (WP14) ------------------------------------------ */
+
+.mentions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 0.75rem);
+}
+
+.mentions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 0.75rem);
+  flex-wrap: wrap;
+}
+
+.mentions-header__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--color-text-primary, #1a1a1a);
+}
+
+.mentions-chip {
+  background: var(--color-primary, #6366f1);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  padding: 0.1rem 0.55rem;
+  font-weight: 600;
+}
+
+.mentions-header__actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.mentions-toggle {
+  display: inline-flex;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.mentions-toggle__btn {
+  background: transparent;
+  border: none;
+  padding: 0.35rem 0.85rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary, #64748b);
+}
+
+.mentions-toggle__btn--active {
+  background: var(--color-primary, #6366f1);
+  color: #fff;
+}
+
+.mentions-mark-all {
+  background: transparent;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  padding: 0.35rem 0.85rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.mentions-mark-all:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mentions-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mentions-row {
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+}
+
+.mentions-row__btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 0.75rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--color-text-primary, #1a1a1a);
+}
+
+.mentions-row--unread .mentions-row__btn {
+  background: rgba(99, 102, 241, 0.06);
+}
+
+.mentions-row--unread .mentions-row__actor {
+  font-weight: 700;
+}
+
+.mentions-row__time {
+  color: var(--color-text-secondary, #64748b);
+  font-size: 0.8rem;
+}
+
+.mentions-row__excerpt em {
+  color: var(--color-text-secondary, #64748b);
+  font-style: italic;
+}
+
+.mentions-row__badge {
+  display: inline-block;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.mentions-row__badge--blocked {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.mentions-row__badge--resolved {
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.mentions-row__badge--cancelled {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.mentions-row__badge--warning {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+/* v2.6-WP41: neutral/info badge for ticket_watcher_added.
+   Distinct from cancelled (slate) and warning (amber); reuses the primary
+   palette token for the info-blue feel without burning a new variable. */
+.mentions-row__badge--watcher {
+  background: #eff6ff;
+  color: var(--color-primary-start, #1d4ed8);
+  border: 1px solid #bfdbfe;
+}
+
+.mentions-empty {
+  color: var(--color-text-secondary, #64748b);
+  padding: 2rem;
+  text-align: center;
+}
+
+.mentions-error {
+  color: #b91c1c;
+  padding: 0.5rem;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  border-radius: 6px;
+}
+
+.mentions-more {
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem;
+}
+
+.mentions-more button {
+  background: transparent;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  padding: 0.4rem 1rem;
+  cursor: pointer;
+}
+
+.mentions-total {
+  color: var(--color-text-secondary, #64748b);
+  font-size: 0.75rem;
+  text-align: right;
+}
+
+/* Sidebar Activity badge (WP14) */
+.sidebar__link-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  background: var(--color-primary, #6366f1);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  padding: 0.05rem 0.45rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
