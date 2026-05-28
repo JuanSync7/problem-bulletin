@@ -1,4 +1,4 @@
-"""MCP tool adapters (Task A16 / R4).
+"""MCP tool adapters (Step 3).
 
 Each adapter:
     1. Authenticates via the supplied :class:`Actor` (obtained by the server
@@ -13,7 +13,6 @@ error envelope ``{"error": {...}}``.
 """
 from __future__ import annotations
 
-import uuid
 from typing import Any, Optional
 from uuid import UUID
 
@@ -36,7 +35,7 @@ async def _safely(coro, *, correlation_id: str) -> dict[str, Any]:
     try:
         result = await coro
         return result
-    except Exception as exc:  # noqa: BLE001 - we translate uniformly
+    except Exception as exc:  # noqa: BLE001
         return map_exception_to_jsonrpc(exc, correlation_id=correlation_id)
 
 
@@ -60,14 +59,14 @@ async def create_ticket(
             actor=actor,
             title=title,
             description=description,
-            ticket_type=TicketType(ticket_type),
+            type=TicketType(ticket_type),
             priority=TicketPriority(priority),
             parent_id=UUID(parent_id) if parent_id else None,
             labels=labels or [],
             correlation_id=correlation_id,
         )
         return {
-            "ticket_key": ticket.key,
+            "ticket_key": ticket.computed_display_id,
             "id": str(ticket.id),
             "version": ticket.version,
             "correlation_id": correlation_id,
@@ -113,7 +112,7 @@ async def update_status(
             correlation_id=correlation_id,
         )
         return {
-            "ticket_key": ticket.key,
+            "ticket_key": ticket.computed_display_id,
             "status": ticket.status.value,
             "version": ticket.version,
             "correlation_id": correlation_id,
@@ -152,14 +151,14 @@ async def list_my_tickets(
     svc = TicketService()
 
     async def _do():
-        rows = await svc.list(
+        page = await svc.list_page(
             db,
             assignee_id=actor.id,
             status=status,
             limit=limit,
         )
         return {
-            "items": [t.to_dict() for t in rows],
+            "items": [t.to_dict() for t in page["items"]],
             "correlation_id": correlation_id,
         }
 
@@ -189,7 +188,7 @@ async def assign(
             correlation_id=correlation_id,
         )
         return {
-            "ticket_key": ticket.key,
+            "ticket_key": ticket.computed_display_id,
             "assignee_id": str(ticket.assignee_id),
             "assignee_type": ticket.assignee_type,
             "version": ticket.version,
@@ -213,7 +212,7 @@ async def claim(
             db, _resolve(id_or_key), actor=actor, correlation_id=correlation_id
         )
         return {
-            "ticket_key": ticket.key,
+            "ticket_key": ticket.computed_display_id,
             "assignee_id": str(ticket.assignee_id),
             "version": ticket.version,
             "correlation_id": correlation_id,
@@ -312,7 +311,7 @@ TOOLS: dict[str, dict[str, Any]] = {
     },
     "get_ticket": {
         "fn": get_ticket,
-        "description": "Retrieve a ticket by UUID or TKT-N key.",
+        "description": "Retrieve a ticket by UUID or TKT-N display_id.",
         "schema": {
             "type": "object",
             "required": ["id_or_key"],

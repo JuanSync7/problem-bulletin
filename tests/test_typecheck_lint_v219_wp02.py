@@ -103,54 +103,6 @@ _OFFENDER_ALLOWLIST: dict[str, str] = {
         "ORM boundary -- `return-value` is the artefact of the missing "
         "SQLAlchemy mypy plugin; runtime descriptor returns T correctly."
     ),
-    "app/routes/projects.py:159:attr-defined": (
-        "BY-DESIGN: SQLAlchemy lazy-loaded relationship rendered as "
-        "Optional[list[X]] by mypy; runtime always returns a list "
-        "(possibly empty). `attr-defined` is the resulting artefact -- "
-        "SQLAlchemy plugin would narrow."
-    ),
-    "app/routes/tickets.py:258:attr-defined": (
-        "BY-DESIGN: SQLAlchemy lazy-loaded relationship rendered as "
-        "Optional[list[X]] by mypy; runtime always returns a list "
-        "(possibly empty). `attr-defined` is the resulting artefact -- "
-        "SQLAlchemy plugin would narrow."
-    ),
-    "app/routes/tickets.py:577:attr-defined": (
-        "BY-DESIGN: SQLAlchemy lazy-loaded relationship rendered as "
-        "Optional[list[X]] by mypy; runtime always returns a list "
-        "(possibly empty). `attr-defined` is the resulting artefact -- "
-        "SQLAlchemy plugin would narrow."
-    ),
-    "app/routes/tickets.py:605:attr-defined": (
-        "BY-DESIGN: SQLAlchemy lazy-loaded relationship rendered as "
-        "Optional[list[X]] by mypy; runtime always returns a list "
-        "(possibly empty). `attr-defined` is the resulting artefact -- "
-        "SQLAlchemy plugin would narrow."
-    ),
-    "app/routes/tickets.py:704:attr-defined": (
-        "BY-DESIGN: SQLAlchemy lazy-loaded relationship rendered as "
-        "Optional[list[X]] by mypy; runtime always returns a list "
-        "(possibly empty). `attr-defined` is the resulting artefact -- "
-        "SQLAlchemy plugin would narrow."
-    ),
-    "app/routes/tickets.py:705:attr-defined": (
-        "BY-DESIGN: SQLAlchemy lazy-loaded relationship rendered as "
-        "Optional[list[X]] by mypy; runtime always returns a list "
-        "(possibly empty). `attr-defined` is the resulting artefact -- "
-        "SQLAlchemy plugin would narrow."
-    ),
-    "app/routes/tickets.py:725:attr-defined": (
-        "BY-DESIGN: SQLAlchemy lazy-loaded relationship rendered as "
-        "Optional[list[X]] by mypy; runtime always returns a list "
-        "(possibly empty). `attr-defined` is the resulting artefact -- "
-        "SQLAlchemy plugin would narrow."
-    ),
-    "app/routes/tickets.py:798:attr-defined": (
-        "BY-DESIGN: SQLAlchemy lazy-loaded relationship rendered as "
-        "Optional[list[X]] by mypy; runtime always returns a list "
-        "(possibly empty). `attr-defined` is the resulting artefact -- "
-        "SQLAlchemy plugin would narrow."
-    ),
     "app/services/audit_log_archive.py:221:attr-defined": (
         "BY-DESIGN: attribute access against a SQLAlchemy descriptor / "
         "lazy-loaded relationship; `attr-defined` artefact of the missing "
@@ -230,11 +182,6 @@ _OFFENDER_ALLOWLIST: dict[str, str] = {
         "None branch is excluded by a prior guard mypy cannot see "
         "(typically a conditional return)."
     ),
-    "app/services/projects.py:392:valid-type": (
-        "BY-DESIGN: <Service>.list method shadows the `list` type-name "
-        "when used as an annotation in the same scope. Self-shadow noted "
-        "in WP01 diagnosis; renaming the method is the future-WP fix."
-    ),
     "app/services/ticket_notifications.py:1125:attr-defined": (
         "BY-DESIGN: attribute access against a SQLAlchemy descriptor / "
         "lazy-loaded relationship; `attr-defined` artefact of the missing "
@@ -249,36 +196,6 @@ _OFFENDER_ALLOWLIST: dict[str, str] = {
         "BY-DESIGN: SQLAlchemy Column[T] / Mapped[T] vs T variance at the "
         "ORM boundary -- `arg-type` is the artefact of the missing "
         "SQLAlchemy mypy plugin; runtime descriptor returns T correctly."
-    ),
-    "app/services/tickets.py:1384:valid-type": (
-        "BY-DESIGN: <Service>.list method shadows the `list` type-name "
-        "when used as an annotation in the same scope. Self-shadow noted "
-        "in WP01 diagnosis; renaming the method is the future-WP fix."
-    ),
-    "app/services/tickets.py:1512:valid-type": (
-        "BY-DESIGN: <Service>.list method shadows the `list` type-name "
-        "when used as an annotation in the same scope. Self-shadow noted "
-        "in WP01 diagnosis; renaming the method is the future-WP fix."
-    ),
-    "app/services/tickets.py:1533:valid-type": (
-        "BY-DESIGN: <Service>.list method shadows the `list` type-name "
-        "when used as an annotation in the same scope. Self-shadow noted "
-        "in WP01 diagnosis; renaming the method is the future-WP fix."
-    ),
-    "app/services/tickets.py:1652:valid-type": (
-        "BY-DESIGN: <Service>.list method shadows the `list` type-name "
-        "when used as an annotation in the same scope. Self-shadow noted "
-        "in WP01 diagnosis; renaming the method is the future-WP fix."
-    ),
-    "app/services/tickets.py:1697:valid-type": (
-        "BY-DESIGN: <Service>.list method shadows the `list` type-name "
-        "when used as an annotation in the same scope. Self-shadow noted "
-        "in WP01 diagnosis; renaming the method is the future-WP fix."
-    ),
-    "app/services/tickets.py:1734:valid-type": (
-        "BY-DESIGN: <Service>.list method shadows the `list` type-name "
-        "when used as an annotation in the same scope. Self-shadow noted "
-        "in WP01 diagnosis; renaming the method is the future-WP fix."
     ),
     "app/services/tickets.py:698:assignment": (
         "BY-DESIGN: SQLAlchemy Column[T] / Mapped[T] vs T variance at the "
