@@ -6,7 +6,7 @@
  * filtered by tag isn't exposed by the API yet — we surface the usage
  * count and a CTA into the tag-scoped search.
  */
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { parseApiError } from "../api/errors";
 

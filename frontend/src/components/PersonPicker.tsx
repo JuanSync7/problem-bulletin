@@ -21,7 +21,7 @@
  *
  * No external debounce library is used (Cross-WP Rule: no new deps).
  */
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { searchPeople, type PersonKind, type PersonRef } from "../api/people";
 
 export interface PersonPickerValue {

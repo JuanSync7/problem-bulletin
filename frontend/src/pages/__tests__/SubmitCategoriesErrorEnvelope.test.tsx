@@ -14,7 +14,6 @@
  * that path (which was the actual swallow class).
  */
 import "@testing-library/jest-dom";
-import React from "react";
 import { render, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

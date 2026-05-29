@@ -12,7 +12,7 @@
  * TicketFields stays purely presentational; edit controls live in this page
  * component, mirroring the drawer's pattern exactly.
  */
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   getTicket,

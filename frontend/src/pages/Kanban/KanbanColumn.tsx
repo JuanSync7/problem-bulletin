@@ -1,4 +1,3 @@
-import React from "react";
 import { useDroppable } from "@dnd-kit/core";
 import type { TicketDTO, TicketStatus } from "../../api/tickets";
 import { TicketCard } from "./TicketCard";

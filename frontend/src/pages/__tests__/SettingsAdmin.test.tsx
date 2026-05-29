@@ -8,7 +8,6 @@
  *  4. Event filter input changes the API call.
  */
 import "@testing-library/jest-dom";
-import React from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";

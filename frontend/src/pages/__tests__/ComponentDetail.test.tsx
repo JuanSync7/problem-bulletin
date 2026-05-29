@@ -6,7 +6,6 @@
  * `/api/v1/projects/<id>/components` to locate the requested component by id.
  */
 import "@testing-library/jest-dom";
-import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

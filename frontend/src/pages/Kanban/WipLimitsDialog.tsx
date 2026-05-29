@@ -14,7 +14,7 @@
  * Server-enforced as of v2.2-WP15; this is UX-only.
  * A 403 from the server surfaces an inline error message.
  */
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { ApiError } from "../../api/tickets";
 import { updateProject, type ProjectDTO } from "../../api/projects";
 import type { TicketStatus } from "../../api/tickets";

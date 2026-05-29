@@ -11,7 +11,7 @@
  * Renders: transitions, comments, link events in chronological order.
  * Supports cursor-based "Load more" (same pattern as MentionsTab).
  */
-import React, { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   listActivity,
   type ActivityItem,

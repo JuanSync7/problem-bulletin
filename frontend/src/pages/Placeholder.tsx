@@ -1,4 +1,3 @@
-import React from "react";
 
 export function PlaceholderPage({ name }: { name: string }) {
   return (

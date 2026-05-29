@@ -6,7 +6,6 @@
  * `onChange`. Hooks (`useSprintsByProject`, `useComponentsByProject`,
  * `useMembersByProject`) are the WP4 reusables — do not duplicate.
  */
-import React from "react";
 import {
   useSprintsByProject,
   useComponentsByProject,

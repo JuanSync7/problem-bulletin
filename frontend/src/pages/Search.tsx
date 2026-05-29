@@ -11,7 +11,7 @@
  * Tab idiom matches Settings.tsx (role="tablist" + settings__tab buttons).
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { ProblemStatus } from "../components/StatusBadge";
 import { StatusBadge } from "../components/StatusBadge";

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { ProblemCard } from "../components/ProblemCard";
 import { SortFilterBar } from "../components/SortFilterBar";
 import { EmptyState } from "../components/EmptyState";

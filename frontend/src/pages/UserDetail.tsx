@@ -7,7 +7,7 @@
  * handle (case-insensitive). The activity feed isn't filterable by actor
  * yet, so we surface identity + a CTA into the global activity page.
  */
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { parseApiError } from "../api/errors";
 

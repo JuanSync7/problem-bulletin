@@ -10,7 +10,7 @@
  * For small project counts this is fine; if it ever grows hot, the
  * obvious follow-up is to add `GET /api/v1/components/{id}` server-side.
  */
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   listProjects,

@@ -5,7 +5,6 @@
  * the "Last touched" header chip, and the agent_step_id chip rendering.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 
 import { TicketDetailDrawer } from "../TicketDetailDrawer";

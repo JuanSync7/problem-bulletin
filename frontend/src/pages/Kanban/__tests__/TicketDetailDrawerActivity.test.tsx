@@ -6,7 +6,6 @@
  *    button hides when next_cursor=null.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import React from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 
 import { TicketDetailDrawer } from "../TicketDetailDrawer";

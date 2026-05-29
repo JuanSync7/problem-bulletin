@@ -24,7 +24,6 @@
  * future re-introduction of the silent-swallow class.
  */
 import "@testing-library/jest-dom";
-import React from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

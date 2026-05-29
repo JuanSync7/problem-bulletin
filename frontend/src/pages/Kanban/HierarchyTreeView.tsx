@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getSubtree, listTickets, type SubtreeRow, type TicketDTO } from "../../api/tickets";
 import {
   TICKET_TYPE_BADGE,
