@@ -4,7 +4,6 @@ import {
   assignTicket,
   getSubtree,
   getTicket,
-  listActivity,
   transitionTicket,
   updateTicket,
   type CommentDTO,

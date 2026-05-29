@@ -103,7 +103,7 @@ const _OFFENDER_ALLOWLIST: OffenderEntry[] = [
   // page-load failure.
   {
     file: "frontend/src/pages/Search.tsx",
-    line: 354,
+    line: 350,
     kind: "bare",
     justification:
       "BY-DESIGN: categories filter is best-effort enrichment of Search UI; failure leaves dropdown empty; surfacing a toast on every search page-load failure would be noisy and the user can still execute searches",

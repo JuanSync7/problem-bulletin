@@ -15,7 +15,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import React from "react";
-import { render, screen, within } from "@testing-library/react";
+import { render, within } from "@testing-library/react";
 import { DndContext } from "@dnd-kit/core";
 import { KanbanBoard } from "../KanbanBoard";
 import type { TicketDTO } from "../../../api/tickets";

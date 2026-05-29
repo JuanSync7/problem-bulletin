@@ -74,10 +74,6 @@ interface Category {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function armTotal(arm: { total: number } | undefined | null): number {
-  return arm?.total ?? 0;
-}
-
 function TicketStatusBadge({ status }: { status: string | null }) {
   if (!status) return null;
   const labels: Record<string, string> = {

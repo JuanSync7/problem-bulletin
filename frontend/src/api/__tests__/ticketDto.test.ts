@@ -16,6 +16,7 @@ describe("TicketDTO assignee_type", () => {
       status: "todo",
       assignee_id: "u1",
       assignee_type: "user",
+      version: 1,
     };
     const agent: TicketDTO = {
       id: "t2",
@@ -23,14 +24,16 @@ describe("TicketDTO assignee_type", () => {
       status: "todo",
       assignee_id: "a1",
       assignee_type: "agent",
+      version: 1,
     };
     const unassigned: TicketDTO = {
       id: "t3",
       title: "z",
       status: "todo",
       assignee_type: null,
+      version: 1,
     };
-    const omitted: TicketDTO = { id: "t4", title: "w", status: "todo" };
+    const omitted: TicketDTO = { id: "t4", title: "w", status: "todo", version: 1 };
 
     expect(human.assignee_type).toBe("user");
     expect(agent.assignee_type).toBe("agent");

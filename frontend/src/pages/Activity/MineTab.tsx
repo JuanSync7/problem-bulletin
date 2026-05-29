@@ -53,7 +53,7 @@ function statusLabel(s: TicketStatus): string {
 
 export default function MineTab() {
   const navigate = useNavigate();
-  const { user, isLoading: authLoading } = useAuth();
+  const { isLoading: authLoading } = useAuth();
 
   const [filter, setFilter] = React.useState<ViewFilter>("open");
   const [items, setItems] = React.useState<TicketDTO[]>([]);
