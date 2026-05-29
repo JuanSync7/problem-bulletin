@@ -1049,7 +1049,7 @@ export default function ProblemDetail() {
       <div className="problem-detail">
         <div className="problem-detail__error" role="alert">
           <p>{error || "Problem not found"}</p>
-          <button className="problem-detail__retry-btn" onClick={fetchProblem}>
+          <button className="problem-detail__retry-btn" onClick={() => fetchProblem()}>
             Retry
           </button>
         </div>
