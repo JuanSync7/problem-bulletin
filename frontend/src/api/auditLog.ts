@@ -6,6 +6,8 @@
  * callers can gate the fetch on role rather than error-handling.
  */
 
+import { parseJson } from "./_jsonParse";
+
 export interface AuditLogActor {
   kind: "user" | "agent";
   id: string;
@@ -69,5 +71,5 @@ export async function listAuditLog(
     });
   }
 
-  return res.json() as Promise<AuditLogPage>;
+  return parseJson<AuditLogPage>(res);
 }

@@ -7,6 +7,7 @@
 
 import { ApiError, type ErrorEnvelope } from "./tickets";
 import { parseApiError } from "./errors";
+import { parseJson } from "./_jsonParse";
 
 export type PersonKind = "user" | "agent";
 
@@ -55,7 +56,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new ApiError(res.status, env);
   }
   if (res.status === 204) return undefined as unknown as T;
-  return (await res.json()) as T;
+  return parseJson<T>(res);
 }
 
 export async function searchPeople(

@@ -16,6 +16,7 @@
  * a useful message.
  */
 import { parseApiError } from "./errors";
+import { parseJson } from "./_jsonParse";
 
 export type TicketStatus =
   | "backlog"
@@ -195,7 +196,7 @@ async function request<T>(
   }
   // 204 / empty
   if (res.status === 204) return undefined as unknown as T;
-  return (await res.json()) as T;
+  return parseJson<T>(res);
 }
 
 // ---------------------------------------------------------------------------

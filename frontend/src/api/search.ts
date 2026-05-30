@@ -10,6 +10,7 @@
  */
 import { ApiError, type ErrorEnvelope } from "./tickets";
 import { parseApiError } from "./errors";
+import { parseJson } from "./_jsonParse";
 
 export type SearchEntity = "all" | "problems" | "tickets" | "components" | "labels" | "users";
 
@@ -111,5 +112,5 @@ export async function searchV2(params: SearchV2Params): Promise<SearchV2Response
     throw new ApiError(res.status, env);
   }
 
-  return (await res.json()) as SearchV2Response;
+  return await parseJson<SearchV2Response>(res);
 }

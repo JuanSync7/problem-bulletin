@@ -9,6 +9,7 @@
  */
 import { ApiError, type ErrorEnvelope } from "./tickets";
 import { parseApiError } from "./errors";
+import { parseJson } from "./_jsonParse";
 
 export interface ActivityEntry {
   id: string;
@@ -55,10 +56,10 @@ export async function listAgentActivity(
       };
       throw new ApiError(res.status, env);
     }
-    const body = await res.json();
+    const body = await parseJson<unknown>(res);
     // accept either {items:[...]} or a bare array
     if (Array.isArray(body)) return body as ActivityEntry[];
-    return (body?.items ?? []) as ActivityEntry[];
+    return ((body as { items?: ActivityEntry[] } | null)?.items ?? []) as ActivityEntry[];
   } catch (e) {
     if (e instanceof ApiError) throw e;
     return [];

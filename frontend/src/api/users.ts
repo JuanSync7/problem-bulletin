@@ -12,6 +12,7 @@
  */
 
 import { parseApiError } from "./errors";
+import { parseJson } from "./_jsonParse";
 
 export interface UpdateHandleResponse {
   id: string;
@@ -50,12 +51,12 @@ export async function updateMyHandle(
   });
 
   if (res.ok) {
-    return res.json() as Promise<UpdateHandleResponse>;
+    return parseJson<UpdateHandleResponse>(res);
   }
 
   let body: unknown = null;
   try {
-    body = await res.json();
+    body = await parseJson<unknown>(res);
   } catch {
     // empty body
   }
