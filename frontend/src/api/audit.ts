@@ -25,6 +25,36 @@ export interface ActivityEntry {
   details?: Record<string, unknown> | null;
 }
 
+/**
+ * v2.27-WP02 (C2): runtime predicate for ActivityEntry. Checks required
+ * string fields; optional fields are only constrained when present.
+ */
+export function isActivityEntry(x: unknown): x is ActivityEntry {
+  if (!x || typeof x !== "object") return false;
+  const r = x as Record<string, unknown>;
+  return (
+    typeof r.id === "string" &&
+    typeof r.occurred_at === "string" &&
+    typeof r.actor_id === "string" &&
+    typeof r.actor_type === "string" &&
+    typeof r.action === "string" &&
+    typeof r.entity_type === "string" &&
+    typeof r.entity_id === "string"
+  );
+}
+
+/**
+ * v2.27-WP02: accept canonical {items:[...]} OR legacy bare-array payload.
+ */
+export function isActivityPage(
+  x: unknown,
+): x is { items: ActivityEntry[] } | ActivityEntry[] {
+  if (Array.isArray(x)) return x.every(isActivityEntry);
+  if (!x || typeof x !== "object") return false;
+  const items = (x as { items?: unknown }).items;
+  return Array.isArray(items) && items.every(isActivityEntry);
+}
+
 export interface ListActivityParams {
   project_id?: string;
   actor_type?: "agent" | "user";
@@ -56,10 +86,10 @@ export async function listAgentActivity(
       };
       throw new ApiError(res.status, env);
     }
-    const body = await parseJson<unknown>(res);
+    const body = await parseJson(res, isActivityPage);
     // accept either {items:[...]} or a bare array
-    if (Array.isArray(body)) return body as ActivityEntry[];
-    return ((body as { items?: ActivityEntry[] } | null)?.items ?? []) as ActivityEntry[];
+    if (Array.isArray(body)) return body;
+    return body.items;
   } catch (e) {
     if (e instanceof ApiError) throw e;
     return [];

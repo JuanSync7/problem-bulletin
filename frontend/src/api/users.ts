@@ -18,9 +18,27 @@ export interface UpdateHandleResponse {
   id: string;
   email: string;
   display_name: string;
-  handle: string;
+  // v2.27-WP02 drift fix: backend UserHandleResponse.handle is Optional[str];
+  // the previous ``string`` typing silently absorbed null at this seam.
+  handle: string | null;
   role: string;
   is_active: boolean;
+}
+
+/**
+ * v2.27-WP02 (C2): runtime predicate for UpdateHandleResponse.
+ */
+export function isUpdateHandleResponse(x: unknown): x is UpdateHandleResponse {
+  if (!x || typeof x !== "object") return false;
+  const r = x as Record<string, unknown>;
+  return (
+    typeof r.id === "string" &&
+    typeof r.email === "string" &&
+    typeof r.display_name === "string" &&
+    (typeof r.handle === "string" || r.handle === null) &&
+    typeof r.role === "string" &&
+    typeof r.is_active === "boolean"
+  );
 }
 
 export interface UpdateHandleError {
@@ -51,7 +69,7 @@ export async function updateMyHandle(
   });
 
   if (res.ok) {
-    return parseJson<UpdateHandleResponse>(res);
+    return parseJson<UpdateHandleResponse>(res, isUpdateHandleResponse);
   }
 
   let body: unknown = null;
