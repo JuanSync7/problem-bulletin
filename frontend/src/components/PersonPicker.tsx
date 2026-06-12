@@ -267,7 +267,7 @@ export function PersonPicker(props: PersonPickerProps) {
               style={{
                 padding: "6px 8px",
                 cursor: "pointer",
-                borderBottom: "1px dashed #e2e8f0",
+                borderBottom: "1px dashed var(--color-border, #E3E0D6)",
                 fontStyle: "italic",
               }}
             >

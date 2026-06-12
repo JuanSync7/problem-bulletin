@@ -50,16 +50,10 @@
 
 .kanban-page__body {
   display: grid;
-  grid-template-columns: 1fr 320px;
+  grid-template-columns: 1fr;
   gap: 1rem;
   flex: 1;
   min-height: 0;
-}
-
-@media (max-width: 900px) {
-  .kanban-page__body {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* WP43 — Wrapper that carries --kanban-lane-height override for the board.
@@ -285,6 +279,96 @@
   border-radius: 10px;
   padding: 0.1rem 0.45rem;
   font-weight: 600;
+}
+
+/* v2.29 S5 — agent run-status chip. Small, token-driven, no heavy borders. */
+.kanban-card__run-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 10px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: var(--card-tint);
+  color: var(--color-text-muted, var(--color-text-secondary));
+}
+
+.kanban-card__run-chip--pending {
+  color: var(--color-text-muted, var(--color-text-secondary));
+}
+
+.kanban-card__run-chip--running {
+  color: var(--color-primary-start);
+  background: color-mix(in srgb, var(--color-primary-start) 10%, transparent);
+  animation: kanban-run-pulse 1.4s ease-in-out infinite;
+}
+
+.kanban-card__run-chip--done {
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 10%, transparent);
+}
+
+.kanban-card__run-chip--error {
+  color: var(--color-error);
+  background: color-mix(in srgb, var(--color-error) 10%, transparent);
+}
+
+@keyframes kanban-run-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* v2.29 S5 — inline assign affordance + popover. */
+.ticket-card {
+  position: relative;
+}
+
+.ticket-card__avatar--btn {
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.ticket-card__avatar--btn:focus-visible {
+  outline: 2px solid var(--color-primary-start);
+  outline-offset: 1px;
+}
+
+.ticket-card__assign-btn {
+  background: transparent;
+  border: 1px dashed var(--color-border);
+  border-radius: 10px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.65rem;
+  color: var(--color-text-muted, var(--color-text-secondary));
+  cursor: pointer;
+}
+
+.ticket-card__assign-btn:hover {
+  border-color: var(--color-primary-start);
+  color: var(--color-primary-start);
+}
+
+.kanban-card__assign-pop {
+  position: absolute;
+  right: 0.4rem;
+  bottom: 2rem;
+  z-index: 30;
+  min-width: 220px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--card-radius, 10px);
+  box-shadow: var(--card-shadow-hover, 0 4px 16px rgba(0, 0, 0, 0.12));
+  padding: 0.4rem;
+}
+
+.kanban-card__assign-error {
+  margin: 0.35rem 0.1rem 0.1rem;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  color: var(--color-error, #C2453A);
 }
 
 /* Drawer */

@@ -1,11 +1,24 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import type { TicketDTO } from "../../api/tickets";
+import { assignTicket } from "../../api/tickets";
+import { PersonPicker } from "../../components/PersonPicker/index";
+import type { PersonRef } from "../../api/people";
 import {
   TICKET_TYPE_BADGE,
   TICKET_TYPE_LABEL,
   type TicketTypeV2,
 } from "../CreateTicket/fieldsByType";
+
+/** v2.29 S5 — agent-run lifecycle status, supplied by the board. */
+export type AgentRunChipStatus = "pending" | "running" | "done" | "error";
+
+const RUN_CHIP_LABEL: Record<AgentRunChipStatus, string> = {
+  pending: "queued",
+  running: "working…",
+  done: "done",
+  error: "failed",
+};
 
 interface TicketCardProps {
   ticket: TicketDTO;
@@ -15,6 +28,14 @@ interface TicketCardProps {
   /** When provided, displays the active sprint name on the card. */
   activeSprintLookup?: Record<string, string>;
   onEpicClick?: (epicId: string) => void;
+  /**
+   * v2.29 S5 — latest agent-run status for agent-assigned tickets. The
+   * BOARD fetches runs (once per refresh, agent-assigned tickets only);
+   * the card itself never calls the agent-runs API.
+   */
+  agentRunStatus?: AgentRunChipStatus | null;
+  /** v2.29 S5 — called after a successful inline (re)assign. */
+  onAssigned?: () => void;
 }
 
 function initials(s?: string | null): string {
@@ -33,8 +54,51 @@ export function TicketCard({
   epicLookup = {},
   activeSprintLookup = {},
   onEpicClick,
+  agentRunStatus = null,
+  onAssigned,
 }: TicketCardProps) {
   const dragId = ticket.display_id || ticket.id;
+  // v2.29 S5 — inline assign popover state.
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const [assignError, setAssignError] = useState<string | null>(null);
+
+  // Escape closes the popover regardless of inner focus.
+  useEffect(() => {
+    if (!assignOpen) {
+      setAssignError(null);
+      return;
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAssignOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [assignOpen]);
+
+  const handleAssign = async (person: PersonRef | null) => {
+    if (!person) {
+      setAssignOpen(false);
+      return;
+    }
+    setAssigning(true);
+    setAssignError(null);
+    try {
+      await assignTicket(dragId, {
+        assignee_id: person.id,
+        assignee_type: person.kind,
+        expected_version: ticket.version,
+      });
+      setAssignOpen(false);
+      onAssigned?.();
+    } catch (err) {
+      // Keep the popover open and surface the reason inline so the user
+      // can retry (e.g. a version conflict after a concurrent edit).
+      setAssignError(err instanceof Error ? err.message : "Failed to assign");
+    } finally {
+      setAssigning(false);
+    }
+  };
   const { attributes, listeners, setNodeRef, isDragging, transform } =
     useDraggable({ id: dragId, data: { ticket } });
 
@@ -83,9 +147,21 @@ export function TicketCard({
         e.stopPropagation();
         onClick?.(dragId);
       }}
+      onDoubleClick={(e) => {
+        if (isDragging) return;
+        e.stopPropagation();
+        // Full navigation to avoid a Router-context dependency on this
+        // leaf card (the kanban renders TicketCard outside the standard
+        // Router boundary in some test harnesses).
+        window.location.assign(`/tickets/${encodeURIComponent(dragId)}`);
+      }}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
+        // Only react to keys on the card itself — typing inside nested
+        // interactive children (e.g. the assign popover's input) must
+        // not open the drawer.
+        if (e.target !== e.currentTarget) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onClick?.(dragId);
@@ -148,32 +224,93 @@ export function TicketCard({
             {sprintLabel}
           </span>
         )}
+        {isAgentAssignee && agentRunStatus && (
+          <span
+            className={`kanban-card__run-chip kanban-card__run-chip--${agentRunStatus}`}
+            data-testid="ticket-run-chip"
+            title={`Agent run: ${RUN_CHIP_LABEL[agentRunStatus]}`}
+          >
+            {RUN_CHIP_LABEL[agentRunStatus]}
+          </span>
+        )}
       </div>
       <div className="ticket-card__bottom">
         <span className={`priority-badge priority-badge--${priority}`}>
           {priority}
         </span>
-        {assigneeLabel && (
-          <span
+        {assigneeLabel ? (
+          <button
+            type="button"
             className={
               isAgentAssignee
-                ? "ticket-card__avatar ticket-card__avatar--agent"
-                : "ticket-card__avatar"
+                ? "ticket-card__avatar ticket-card__avatar--agent ticket-card__avatar--btn"
+                : "ticket-card__avatar ticket-card__avatar--btn"
             }
-            title={assigneeLabel}
+            title={`${assigneeLabel} — click to reassign`}
             aria-label={
               isAgentAssignee
                 ? `Agent: ${assigneeLabel}`
                 : `Assignee ${assigneeLabel}`
             }
+            aria-haspopup="dialog"
+            aria-expanded={assignOpen}
             data-testid={
               isAgentAssignee ? "ticket-avatar-agent" : "ticket-avatar-user"
             }
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              setAssignOpen((o) => !o);
+            }}
           >
             {initials(assigneeLabel)}
-          </span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="ticket-card__assign-btn"
+            data-testid="ticket-assign-btn"
+            aria-haspopup="dialog"
+            aria-expanded={assignOpen}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              setAssignOpen((o) => !o);
+            }}
+          >
+            Assign
+          </button>
         )}
       </div>
+      {assignOpen && (
+        <div
+          className="kanban-card__assign-pop"
+          data-testid="ticket-assign-pop"
+          role="dialog"
+          aria-label="Assign ticket"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.stopPropagation();
+              setAssignOpen(false);
+            }
+          }}
+        >
+          <PersonPicker
+            value={null}
+            onChange={(p) => void handleAssign(p)}
+            kind="any"
+            placeholder="Assign to…"
+            disabled={assigning}
+          />
+          {assignError && (
+            <p className="kanban-card__assign-error" role="alert">
+              {assignError}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

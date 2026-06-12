@@ -127,10 +127,10 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("Search (WP57) — tabbed search page", () => {
-  // 1. Renders all six tabs
-  it("renders all six tabs", () => {
+  // 1. Renders all eight tabs (v2.29-S6 adds Share + Bounties)
+  it("renders all eight tabs", () => {
     renderSearch();
-    expect(screen.getAllByRole("tab")).toHaveLength(6);
+    expect(screen.getAllByRole("tab")).toHaveLength(8);
     // Count badge is aria-hidden, so accessible names are clean labels only.
     expect(screen.getByRole("tab", { name: "All" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Problems" })).toBeInTheDocument();
@@ -138,6 +138,8 @@ describe("Search (WP57) — tabbed search page", () => {
     expect(screen.getByRole("tab", { name: "Components" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Labels" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Users" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Share" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Bounties" })).toBeInTheDocument();
   });
 
   // 2. Tab switch preserves query

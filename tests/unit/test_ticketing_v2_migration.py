@@ -14,7 +14,7 @@ import asyncpg
 import pytest
 
 
-_DEFAULT_URL = "postgresql+asyncpg://aion:changeme@localhost:5432/aion_bulletin"
+_DEFAULT_URL = "postgresql+asyncpg://aion:changeme@localhost:28432/aion_bulletin"
 TEST_DB_URL = os.getenv("PB_TEST_DATABASE_URL", _DEFAULT_URL)
 
 

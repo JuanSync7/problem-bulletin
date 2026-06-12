@@ -1133,3 +1133,21 @@ button.solution-card__status-badge:hover {
   gap: 0.5rem;
   align-self: flex-end;
 }
+
+/* v2.29 S5 — Problem→Ticket bridge link-button (audit P1#5). */
+.problem-detail__create-ticket-link {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 0.5rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: var(--color-primary-start);
+  text-decoration: none;
+  background: var(--card-tint);
+}
+
+.problem-detail__create-ticket-link:hover {
+  border-color: var(--color-primary-start);
+}

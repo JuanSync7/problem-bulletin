@@ -68,7 +68,7 @@ _MYPY_LINE_RE = re.compile(
 #     force the deletion).
 # -----------------------------------------------------------------------------
 _OFFENDER_ALLOWLIST: dict[str, str] = {
-    "app/main.py:321:arg-type": (
+    "app/main.py:329:arg-type": (
         "BY-DESIGN: Starlette/FastAPI handler callable variance -- the "
         "FastAPI exception-handler / ASGI mount signature is broader at "
         "runtime than mypy's stub. Framework typing limit."

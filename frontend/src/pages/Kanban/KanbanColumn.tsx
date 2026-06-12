@@ -1,6 +1,6 @@
 import { useDroppable } from "@dnd-kit/core";
 import type { TicketDTO, TicketStatus } from "../../api/tickets";
-import { TicketCard } from "./TicketCard";
+import { TicketCard, type AgentRunChipStatus } from "./TicketCard";
 
 interface KanbanColumnProps {
   status: TicketStatus;
@@ -24,6 +24,10 @@ interface KanbanColumnProps {
    * over-limit).
    */
   wipLimit?: number;
+  /** v2.29 S5 — ticket_id -> latest agent-run status (board-supplied). */
+  agentRunLookup?: Record<string, AgentRunChipStatus>;
+  /** v2.29 S5 — bubbled up from TicketCard after an inline assign. */
+  onAssigned?: () => void;
 }
 
 export function KanbanColumn({
@@ -34,6 +38,8 @@ export function KanbanColumn({
   dropIdSuffix,
   count,
   wipLimit,
+  agentRunLookup,
+  onAssigned,
 }: KanbanColumnProps) {
   const id = dropIdSuffix ? `col:${status}:${dropIdSuffix}` : `col:${status}`;
   const { setNodeRef, isOver } = useDroppable({ id, data: { status } });
@@ -76,7 +82,13 @@ export function KanbanColumn({
       </div>
       <div className="kanban-column__list">
         {tickets.map((t) => (
-          <TicketCard key={t.id} ticket={t} onClick={onCardClick} />
+          <TicketCard
+            key={t.id}
+            ticket={t}
+            onClick={onCardClick}
+            agentRunStatus={agentRunLookup?.[t.id] ?? null}
+            onAssigned={onAssigned}
+          />
         ))}
       </div>
     </div>

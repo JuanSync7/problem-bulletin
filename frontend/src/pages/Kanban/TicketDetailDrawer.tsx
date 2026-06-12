@@ -15,6 +15,12 @@ import {
 import { MentionTextarea } from "../../components/MentionTextarea";
 import { TicketFields } from "../../components/TicketFields";
 import { TicketActivityFeed } from "../../components/TicketActivityFeed";
+import { CommentThread } from "../../components/CommentThread";
+import "../../components/CommentThread/CommentThread.css";
+import { listComments } from "../../api/tickets";
+import { LinkedIssuesSection } from "../TicketDetail/LinkedIssuesSection";
+import { AttachmentsSection } from "../TicketDetail/AttachmentsSection";
+import "../TicketDetail/TicketDetail.css";
 import { PersonPicker } from "../../components/PersonPicker/index";
 import type { PersonRef } from "../../api/people";
 
@@ -221,6 +227,18 @@ export function TicketDetailDrawer({
             Last touched {_relative(ticket.last_activity_at)}
           </span>
         )}
+        <span style={{ flex: 1 }} />
+        {ticket && (
+          <a
+            href={`/tickets/${encodeURIComponent(ticket.display_id || ticket.id)}`}
+            className="kanban-page__btn"
+            data-testid="ticket-drawer-open-full"
+            title="Open full ticket page"
+            style={{ marginRight: "0.5rem", textDecoration: "none" }}
+          >
+            Go to ticket →
+          </a>
+        )}
         <button
           type="button"
           className="ticket-drawer__close"
@@ -310,6 +328,17 @@ export function TicketDetailDrawer({
               )}
             </div>
 
+            {/* v7a — Drawer-page parity: Linked Issues + Attachments + Activity
+             * sections mirror the standalone TicketDetail page so the ticket
+             * "shape" is constant regardless of where it's opened from. */}
+            <LinkedIssuesSection
+              ticketIdOrKey={ticket.display_id || ticket.id}
+            />
+
+            <AttachmentsSection
+              ticketIdOrKey={ticket.display_id || ticket.id}
+            />
+
             {/* Activity feed — extracted component */}
             <div className="ticket-drawer__field">
               <label>Activity</label>
@@ -322,61 +351,45 @@ export function TicketDetailDrawer({
               </div>
             </div>
 
-            {/* Comments */}
+            {/* v7a — nested comment thread (matches problem comment hierarchy) */}
             <div className="ticket-drawer__field">
               <label>Comments</label>
-              <div className="ticket-drawer__comments">
-                {comments.length === 0 && (
-                  <div className="ticket-drawer__comment-meta">No comments yet.</div>
-                )}
-                {comments.map((c) => {
-                  const agent = c.author_type === "agent";
-                  const stepId = (c as { agent_step_id?: string | null })
-                    .agent_step_id;
-                  return (
-                    <div key={c.id} className="ticket-drawer__comment">
-                      <div className="ticket-drawer__comment-meta">
-                        <span
-                          className={`actor-badge actor-badge--${agent ? "agent" : "user"}`}
-                          data-testid="comment-actor-badge"
-                        >
-                          {agent ? "🤖 agent" : "👤 user"}
-                        </span>
-                        {" "}
-                        {c.author_id?.slice(0, 8)}
-                        {stepId && (
-                          <code
-                            className="ticket-drawer__step-id"
-                            title="agent_step_id"
-                          >
-                            {stepId}
-                          </code>
-                        )}
-                        {" · "}
-                        {c.created_at ?? ""}
-                      </div>
-                      <div style={{ whiteSpace: "pre-wrap" }}>{c.body}</div>
-                    </div>
-                  );
-                })}
-              </div>
-              <MentionTextarea
-                rows={2}
-                placeholder="Add a comment…"
-                value={newComment}
-                onChange={setNewComment}
+              <CommentThread
+                ticketIdOrKey={ticket.display_id || ticket.id}
                 projectId={ticket.project_id ?? null}
-                ariaLabel="Add a comment"
+                comments={comments}
+                busy={busy}
+                onChanged={async () => {
+                  try {
+                    const fresh = await listComments(
+                      ticket.display_id || ticket.id,
+                    );
+                    setComments(fresh.items);
+                    setActivityKey((k) => k + 1);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : String(err));
+                  }
+                }}
               />
-              <button
-                type="button"
-                className="kanban-page__btn kanban-page__btn--primary"
-                onClick={onAddComment}
-                disabled={busy || !newComment.trim()}
-                style={{ alignSelf: "flex-start", marginTop: "0.25rem" }}
-              >
-                Post comment
-              </button>
+              <div style={{ marginTop: "0.5rem" }}>
+                <MentionTextarea
+                  rows={2}
+                  placeholder="Add a comment…"
+                  value={newComment}
+                  onChange={setNewComment}
+                  projectId={ticket.project_id ?? null}
+                  ariaLabel="Add a comment"
+                />
+                <button
+                  type="button"
+                  className="kanban-page__btn kanban-page__btn--primary"
+                  onClick={onAddComment}
+                  disabled={busy || !newComment.trim()}
+                  style={{ alignSelf: "flex-start", marginTop: "0.25rem" }}
+                >
+                  Post comment
+                </button>
+              </div>
             </div>
           </>
         )}

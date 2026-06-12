@@ -52,8 +52,9 @@ const sprints = [
   { id: "sp-2", project_id: "p-def", name: "Sprint 13", state: "planned" as const },
 ];
 
-const { listTicketsMock } = vi.hoisted(() => ({
+const { listTicketsMock, getProjectHierarchyMock } = vi.hoisted(() => ({
   listTicketsMock: vi.fn(),
+  getProjectHierarchyMock: vi.fn(),
 }));
 
 const ticketsByProject: Record<string, any[]> = {
@@ -120,20 +121,34 @@ const ticketsByProject: Record<string, any[]> = {
   ],
 };
 
-listTicketsMock.mockImplementation(async (params: any = {}) => {
-  let items = ticketsByProject[params.project_id] ?? [];
-  if (params.sprint_id) items = items.filter((t) => t.sprint_id === params.sprint_id);
-  if (Array.isArray(params.type) && params.type.length > 0) {
-    items = items.filter((t) => params.type.includes(t.type));
-  }
+// V5b — kanban now reads from getProjectHierarchy. The legacy
+// listTickets mock is preserved but unused so the import surface
+// stays intact for any downstream helper that still references it.
+listTicketsMock.mockImplementation(async () => ({ items: [] }));
+
+getProjectHierarchyMock.mockImplementation(async (projectId: string) => {
+  const items = (ticketsByProject[projectId] ?? []).map((t, idx) => ({
+    depth: 0,
+    parent_id: null,
+    ordinal: idx + 1,
+    ticket: t,
+  }));
   return { items };
 });
 
-vi.mock("../../../api/projects", () => ({
-  listProjects: vi.fn(async () => ({ items: projects })),
-  listComponents: vi.fn(async () => ({ items: [] })),
-  listMembers: vi.fn(async () => ({ items: [] })),
-}));
+vi.mock("../../../api/projects", async () => {
+  const actual =
+    await vi.importActual<typeof import("../../../api/projects")>(
+      "../../../api/projects",
+    );
+  return {
+    ...actual,
+    listProjects: vi.fn(async () => ({ items: projects })),
+    listComponents: vi.fn(async () => ({ items: [] })),
+    listMembers: vi.fn(async () => ({ items: [] })),
+    getProjectHierarchy: getProjectHierarchyMock,
+  };
+});
 
 vi.mock("../../../api/sprints", () => ({
   listSprints: vi.fn(async (projectId: string) => ({
@@ -174,6 +189,7 @@ function renderPage() {
 
 beforeEach(() => {
   listTicketsMock.mockClear();
+  getProjectHierarchyMock.mockClear();
   // Re-install the implementation (mockClear preserves it but be explicit
   // — mockReset would wipe it).
   try {
@@ -212,17 +228,15 @@ describe("KanbanBoard v2", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(listTicketsMock).toHaveBeenCalled();
+      expect(getProjectHierarchyMock).toHaveBeenCalled();
     });
-    const callsBefore = listTicketsMock.mock.calls.length;
+    const callsBefore = getProjectHierarchyMock.mock.calls.length;
 
     await user.selectOptions(screen.getByLabelText("Project"), "AION");
 
     await waitFor(() => {
-      const newCalls = listTicketsMock.mock.calls.slice(callsBefore);
-      expect(
-        newCalls.some((c) => (c[0] as any)?.project_id === "p-aion"),
-      ).toBe(true);
+      const newCalls = getProjectHierarchyMock.mock.calls.slice(callsBefore);
+      expect(newCalls.some((c) => c[0] === "p-aion")).toBe(true);
     });
 
     // AION ticket should appear, DEF tickets should not.
@@ -232,7 +246,7 @@ describe("KanbanBoard v2", () => {
     expect(screen.queryByText("Backlog item")).not.toBeInTheDocument();
   });
 
-  it("sprint filter narrows tickets (server-side filter applied)", async () => {
+  it("sprint filter narrows tickets (client-side filter over hierarchy)", async () => {
     const user = userEvent.setup();
     renderPage();
 
@@ -245,12 +259,8 @@ describe("KanbanBoard v2", () => {
       "sp-1",
     );
 
-    await waitFor(() => {
-      const calls = listTicketsMock.mock.calls;
-      const last = calls[calls.length - 1][0];
-      expect(last?.sprint_id).toBe("sp-1");
-    });
-
+    // V5b — filtering moved client-side over the hierarchy flatten;
+    // assert the visible-tickets pruning rather than a server call shape.
     await waitFor(() => {
       // Only DEF-2 has sprint_id = sp-1
       expect(screen.getByText("Doing it")).toBeInTheDocument();
@@ -290,10 +300,11 @@ describe("KanbanBoard v2", () => {
     await user.click(taskChip);
     expect(taskChip).toHaveAttribute("aria-checked", "true");
 
+    // V5b — type filter is client-side; assert the lane content shifts
+    // instead of inspecting an API query param.
     await waitFor(() => {
-      const last =
-        listTicketsMock.mock.calls[listTicketsMock.mock.calls.length - 1][0];
-      expect(last?.type).toEqual(["task"]);
+      expect(screen.getByText("Doing it")).toBeInTheDocument(); // task
+      expect(screen.queryByText("Backlog item")).not.toBeInTheDocument(); // story
     });
 
     // Toggle off

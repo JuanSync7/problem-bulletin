@@ -29,7 +29,7 @@ from app.enums import ActorType
 from app.services.context import Actor
 
 
-_DEFAULT_URL = "postgresql+asyncpg://aion:changeme@localhost:5432/aion_bulletin"
+_DEFAULT_URL = "postgresql+asyncpg://aion:changeme@localhost:28432/aion_bulletin"
 TEST_DB_URL = os.getenv("PB_TEST_DATABASE_URL", _DEFAULT_URL)
 
 

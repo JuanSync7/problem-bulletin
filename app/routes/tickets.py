@@ -20,7 +20,7 @@ import uuid
 from typing import Any, Literal, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -601,6 +601,9 @@ async def list_comments(
                 "body": c.body,
                 "correlation_id": c.correlation_id,
                 "created_at": c.created_at.isoformat() if c.created_at else None,
+                "parent_comment_id": (
+                    str(c.parent_comment_id) if c.parent_comment_id else None
+                ),
             }
             for c in comments
         ]
@@ -629,6 +632,7 @@ async def add_comment(
         body=payload.body,
         mentions=payload.mentions,
         correlation_id=corr,
+        parent_comment_id=payload.parent_comment_id,
     )
     _attach_corr(response, corr)
     return {
@@ -639,6 +643,10 @@ async def add_comment(
         "body": comment.body,
         "correlation_id": comment.correlation_id,
         "created_at": comment.created_at.isoformat() if comment.created_at else None,
+        "parent_comment_id": (
+            str(comment.parent_comment_id)
+            if comment.parent_comment_id else None
+        ),
     }
 
 
@@ -825,6 +833,57 @@ async def add_attachment(
     )
     _attach_corr(response, corr)
     return a.to_dict()
+
+
+@router.post(
+    "/{id_or_key}/attachments/upload",
+    status_code=status.HTTP_201_CREATED,
+    response_model=TicketAttachmentRead,
+)
+async def upload_attachment(
+    id_or_key: str,
+    request: Request,
+    response: Response,
+    file: UploadFile = File(...),
+    actor: Actor = Depends(get_actor),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """v7a — multipart upload for ticket attachments.
+
+    Persists the uploaded bytes under
+    ``{STORAGE_PATH}/tickets/{ticket_id}/<uuid><ext>`` and registers the
+    metadata via :meth:`TicketService.add_attachment`. The metadata-only
+    ``POST /tickets/{id}/attachments`` route (above) is preserved for
+    callers that already have storage-side bookkeeping; this endpoint is
+    the one the standalone Ticket page wires its file-picker to.
+    """
+    import os
+    from pathlib import Path as _Path
+    from app.config import get_settings
+
+    corr = _correlation_id(request)
+    svc = _service()
+    ticket = await svc._load(db, _resolve_id_or_key(id_or_key))
+    settings = get_settings()
+    contents = await file.read()
+    filename = file.filename or "upload.bin"
+    _, ext = os.path.splitext(filename)
+    uid = uuid.uuid4().hex
+    rel_path = f"tickets/{ticket.id}/{uid}{ext}"
+    full_path = _Path(settings.STORAGE_PATH) / rel_path
+    full_path.parent.mkdir(parents=True, exist_ok=True)
+    full_path.write_bytes(contents)
+    att = await svc.add_attachment(
+        db,
+        ticket.id,
+        actor=actor,
+        filename=filename,
+        content_type=file.content_type or "application/octet-stream",
+        byte_size=len(contents),
+        storage_path=rel_path,
+    )
+    _attach_corr(response, corr)
+    return att.to_dict()
 
 
 @router.delete(

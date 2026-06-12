@@ -2,10 +2,10 @@
  * WP43 — useKanbanLaneHeight unit tests.
  *
  * Covers:
- *  1. Default value is "70vh" when nothing is stored.
+ *  1. Default value is "unlimited" when nothing is stored.
  *  2. Setter writes to localStorage and updates state.
  *  3. Re-mount reads the persisted "unlimited" value.
- *  4. An invalid stored value falls back to the default "70vh".
+ *  4. An invalid stored value falls back to the default "unlimited".
  *  5. laneHeightCssValue maps "unlimited" to the literal string "none".
  */
 import { describe, it, expect, beforeEach } from "vitest";
@@ -25,7 +25,7 @@ describe("useKanbanLaneHeight", () => {
   it("returns '70vh' by default when no stored value exists", () => {
     const { result } = renderHook(() => useKanbanLaneHeight());
     const [height] = result.current;
-    expect(height).toBe("70vh");
+    expect(height).toBe("unlimited");
   });
 
   it("setter writes to localStorage and updates state", () => {
@@ -56,7 +56,7 @@ describe("useKanbanLaneHeight", () => {
     const { result } = renderHook(() => useKanbanLaneHeight());
 
     const [height] = result.current;
-    expect(height).toBe("70vh");
+    expect(height).toBe("unlimited");
   });
 
   it("laneHeightCssValue maps 'unlimited' to 'none' and passes vh values through", () => {

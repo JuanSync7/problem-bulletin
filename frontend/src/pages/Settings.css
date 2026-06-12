@@ -17,20 +17,26 @@
 /* Section */
 
 .settings__section {
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 1.25rem;
-  margin-bottom: 1.25rem;
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 1.5rem 0;
+  margin-bottom: 0;
+}
+
+.settings__section + .settings__section {
+  border-top: 1px solid var(--color-border);
 }
 
 .settings__section-title {
-  font-size: 1rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  color: var(--color-text);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-secondary);
   margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0;
+  border-bottom: none;
 }
 
 /* Toggle row */

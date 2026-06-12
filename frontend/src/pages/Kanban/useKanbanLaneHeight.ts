@@ -23,7 +23,7 @@ import { useCallback, useState } from "react";
 export type LaneHeight = "50vh" | "70vh" | "90vh" | "unlimited";
 
 const LS_KEY = "kanban.laneHeight";
-const DEFAULT: LaneHeight = "70vh";
+const DEFAULT: LaneHeight = "unlimited";
 
 const VALID = new Set<string>(["50vh", "70vh", "90vh", "unlimited"]);
 

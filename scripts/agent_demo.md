@@ -42,7 +42,7 @@ uvicorn app.main:app --reload
 
 # 5) (Optional) start the frontend (another terminal)
 cd frontend && npm install && npm run dev
-# open http://localhost:5173/board
+# open http://localhost:28173/board
 
 # 6) Run the demo (another terminal)
 python scripts/agent_demo.py
@@ -50,7 +50,7 @@ python scripts/agent_demo.py
 
 ### Where to look while it runs
 
-- **Kanban board**: `http://localhost:5173/board` — tickets fly in to *Todo*,
+- **Kanban board**: `http://localhost:28173/board` — tickets fly in to *Todo*,
   then move column-to-column as the demo transitions them.
 - **Agent activity feed**: same page — should fill with the demo agent's
   `create / claim / transitioned / commented / linked` actions.

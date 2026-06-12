@@ -34,4 +34,6 @@ Thumbs.db
 
 # Tooling artefacts
 .backups/
-.claude/scheduled_tasks.lock
+.claude/
+.delivery/
+.delivery-archive-*/

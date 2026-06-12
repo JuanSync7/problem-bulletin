@@ -120,6 +120,8 @@ class TicketCommentRead(BaseModel):
     body: str
     correlation_id: str | None = None
     created_at: datetime | None = None
+    # v7a: nested reply parent. NULL → top-level comment.
+    parent_comment_id: UUID | None = None
 
 
 class TicketCommentsList(BaseModel):
@@ -178,6 +180,9 @@ class TicketAssignBody(BaseModel):
 class TicketCommentBody(BaseModel):
     body: str = Field(..., min_length=1)
     mentions: list[UUID] | None = None
+    # v7a: when set, threads the new comment under an existing comment on
+    # the same ticket. Server validates same-ticket invariant.
+    parent_comment_id: UUID | None = None
 
 
 class TicketLinkBody(BaseModel):

@@ -71,9 +71,13 @@ from app.routes.agents import (
     compat_router as agents_compat_router,
 )
 from app.routes.users import router as users_router, admin_handle_router as users_admin_handle_router
+from app.routes.agent_runs import router as agent_runs_router
+from app.routes.share_posts import router as share_posts_router
+from app.routes.bounties import router as bounties_router
 from app.routes.realtime_ws import router as realtime_ws_router
 from app.routes.realtime_token import router as realtime_token_router
 from app.routes.audit_log import router as audit_log_router
+from app.routes.me import router as me_router
 
 # v2.11-WP05 (A10): ``ForbiddenTransitionError`` and ``ForbiddenError`` are
 # intentionally NOT mapped here. Both are overridden by per-route handlers
@@ -311,9 +315,13 @@ def create_app() -> FastAPI:
     app.include_router(agents_compat_router, prefix=API)
     app.include_router(users_router, prefix=API)
     app.include_router(users_admin_handle_router, prefix=API)
+    app.include_router(agent_runs_router, prefix=API)
+    app.include_router(share_posts_router, prefix=API)
+    app.include_router(bounties_router, prefix=API)
     app.include_router(realtime_ws_router, prefix=API)
     app.include_router(realtime_token_router, prefix=API)
     app.include_router(audit_log_router, prefix=API)
+    app.include_router(me_router, prefix=API)
     app.include_router(health_router)
 
     # --- Agent-kanban domain exception handlers ------------------------------
@@ -334,7 +342,16 @@ def create_app() -> FastAPI:
 
         @app.get("/{full_path:path}")
         async def serve_spa(full_path: str):
-            """Serve the SPA index.html for all non-API routes."""
+            """Serve the SPA index.html for all non-API routes.
+
+            Must not match /api/*, /docs, /openapi.json, /ws, /healthz —
+            those paths either have real routes or should 404. Without this
+            guard, an unmatched /api/* falls through here and returns
+            index.html with HTTP 200, which silently breaks clients that
+            content-sniff (see frontend/src/mock/api.ts isDemoMode).
+            """
+            if full_path.startswith(("api/", "ws", "docs", "openapi", "healthz", "mcp")):
+                raise HTTPException(status_code=404, detail="Not Found")
             file_path = frontend_dist / full_path
             if file_path.is_file():
                 return FileResponse(str(file_path))

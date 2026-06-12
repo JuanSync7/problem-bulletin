@@ -41,3 +41,28 @@ class PersonRef(BaseModel):
 
 class PeopleSearchResponse(BaseModel):
     items: list[PersonRef]
+
+
+# ---------------------------------------------------------------------------
+# V2a — @mention autocomplete candidates (project-scoped).
+# ---------------------------------------------------------------------------
+
+
+class MentionCandidate(BaseModel):
+    """One row in the @mention autocomplete dropdown.
+
+    Returned by ``GET /api/v1/projects/{id}/mention-candidates``. The
+    ``type`` discriminator lets the UI render distinct chips/icons for
+    human users vs agent accounts.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    type: Literal["user", "agent"]
+    id: UUID
+    handle: str
+    display_name: str
+
+
+class MentionCandidatesResponse(BaseModel):
+    items: list[MentionCandidate]

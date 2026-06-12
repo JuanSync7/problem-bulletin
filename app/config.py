@@ -157,6 +157,25 @@ class Settings(BaseSettings):
     AUDIT_LOG_ARCHIVE_DIR: str | None = None
     AUDIT_LOG_ARCHIVE_BATCH_SIZE: int = 1000
 
+    # --- A2a: typeahead ranking tuning knobs ---
+    # Multiplicative recency boost: final_rank = ts_rank * (1 + weight * exp(-age_days/30))
+    # 0.3 → a 1-day-old hit gets ~+30% over the same hit at 6 months.
+    SEARCH_RECENCY_BOOST: float = 0.3
+
+    # Per-entity weight multipliers applied when mode=typeahead and entity=all.
+    # Weights are applied after all other boosts; higher weight → floats to top.
+    # Default from plan §Algorithm §6.
+    SEARCH_ENTITY_WEIGHTS: dict[str, float] = Field(
+        default_factory=lambda: {
+            "ticket": 1.0,
+            "problem": 0.9,
+            "component": 0.7,
+            "label": 0.6,
+            "user": 0.5,
+            "agent": 0.5,
+        }
+    )
+
     @field_validator("AUDIT_LOG_ARCHIVE_BATCH_SIZE")
     @classmethod
     def _v_audit_archive_batch_size(cls, v: int) -> int:

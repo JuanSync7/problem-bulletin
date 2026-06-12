@@ -48,7 +48,7 @@ function applyCssVariables(isDark: boolean) {
     `linear-gradient(135deg, ${grad.start}, ${grad.end})`
   );
 
-  root.style.setProperty("--color-star", isDark ? "#FFD700" : "#D4940A");
+  root.style.setProperty("--color-star", isDark ? "#E5B458" : "#B07A0C");
 
   root.style.setProperty("--color-success", statusColors.success);
   root.style.setProperty("--color-warning", statusColors.warning);

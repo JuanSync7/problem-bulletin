@@ -227,6 +227,16 @@
   border: 1px solid #bfdbfe;
 }
 
+/* V2b: warm-amber chip for kind='human_review'.
+   Uses the existing --color-star token (warm-amber) to signal "needs
+   reviewer attention" — visually distinct from --warning (resolved-amber
+   on light cream) without burning a new token. */
+.mentions-row__badge--human-review {
+  background: #fff7ed;
+  color: var(--color-star, #b45309);
+  border: 1px solid var(--color-star, #f59e0b);
+}
+
 .mentions-empty {
   color: var(--color-text-secondary, #64748b);
   padding: 2rem;

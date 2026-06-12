@@ -238,10 +238,147 @@
 /* Inline edit controls (WP27) — appended below the TicketFields sidebar block */
 .ticket-detail__edit-controls {
   margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border, #d0d7de);
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   font-size: 0.85rem;
+}
+
+/* Description block spacing */
+.ticket-detail__description {
+  margin-bottom: 1.5rem;
+  padding: 0.25rem 0 1.25rem;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+}
+
+/* Linked issues + Attachments + Comments sections (Jira parity) */
+.ticket-detail__links,
+.ticket-detail__attachments,
+.ticket-detail__comments {
+  margin: 1.5rem 0;
+  padding: 0.25rem 0 1.25rem;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+}
+
+.ticket-detail__comments:last-child {
+  border-bottom: none;
+}
+
+.ticket-detail__section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.ticket-detail__section-header .ticket-detail__section-heading {
+  margin: 0;
+}
+
+.ticket-detail__count-pill {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.5rem;
+  color: var(--color-text-secondary);
+}
+
+.ticket-detail__link-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.ticket-detail__link-form select,
+.ticket-detail__link-form input {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-text);
+}
+
+.ticket-detail__link-form input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.ticket-detail__link-group {
+  margin-bottom: 0.6rem;
+}
+
+.ticket-detail__link-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  margin-bottom: 0.2rem;
+}
+
+.ticket-detail__link-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ticket-detail__link-list a {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+  color: var(--color-primary-end);
+  text-decoration: none;
+}
+
+.ticket-detail__link-list a:hover { text-decoration: underline; }
+
+.ticket-detail__attachment-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.ticket-detail__attachment-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.ticket-detail__attachment-meta {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.ticket-detail__comments-form {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: flex-start;
 }
 
 .ticket-detail__field {
@@ -336,4 +473,48 @@
   color: var(--agent-fg);
   margin-left: 0.35em;
   vertical-align: middle;
+}
+
+/* v2.29 S5 — AgentRunBanner lifecycle states. Tokens: agent bronze for
+   the base pill; success/error accents for terminal states. */
+.agent-run-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  background: var(--agent-bg);
+  color: var(--agent-fg);
+  border: 1px solid var(--agent-border, transparent);
+}
+
+.agent-run-banner__link {
+  color: var(--color-primary-start);
+  text-decoration: none;
+}
+
+.agent-run-banner__link:hover {
+  text-decoration: underline;
+}
+
+.agent-run-banner--pending {
+  color: var(--color-text-muted, var(--color-text-secondary));
+  background: var(--card-tint);
+  border-color: var(--color-border);
+}
+
+.agent-run-banner--running {
+  animation: agent-run-banner-pulse 1.4s ease-in-out infinite;
+}
+
+.agent-run-banner--error {
+  color: var(--color-error);
+  background: color-mix(in srgb, var(--color-error) 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-error) 30%, transparent);
+}
+
+@keyframes agent-run-banner-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
 }

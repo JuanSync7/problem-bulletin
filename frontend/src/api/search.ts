@@ -12,7 +12,15 @@ import { ApiError, type ErrorEnvelope } from "./tickets";
 import { parseApiError } from "./errors";
 import { parseJson } from "./_jsonParse";
 
-export type SearchEntity = "all" | "problems" | "tickets" | "components" | "labels" | "users";
+export type SearchEntity =
+  | "all"
+  | "problems"
+  | "tickets"
+  | "components"
+  | "labels"
+  | "users"
+  | "share_posts"
+  | "bounties";
 
 /** Common shape for every result item returned by the backend. */
 export interface SearchItem {
@@ -45,12 +53,149 @@ export interface SearchArm {
   total_authority?: "snapshot" | "live" | null;
 }
 
+/**
+ * The entity-arm keys on SearchV2Response.
+ * Exported for consumers (Search.tsx, useSearchV2.ts) that need to index only
+ * arm fields so TypeScript can narrow the value to SearchArm | null | undefined.
+ */
+export type SearchArmKey =
+  | "problems"
+  | "tickets"
+  | "components"
+  | "labels"
+  | "users"
+  | "share_posts"
+  | "bounties";
+
+/**
+ * Standard multi-entity search response (mode=v2, the default).
+ * Contains only the five entity arms — all values are SearchArm.
+ * Consumers can safely index with `keyof SearchV2Response` or `SearchArmKey`.
+ */
 export interface SearchV2Response {
   problems?: SearchArm | null;
   tickets?: SearchArm | null;
   components?: SearchArm | null;
   labels?: SearchArm | null;
   users?: SearchArm | null;
+  /** v2.29-S6: Share space posts arm. */
+  share_posts?: SearchArm | null;
+  /** v2.29-S6: Bounty space arm. */
+  bounties?: SearchArm | null;
+}
+
+/**
+ * A-FR-002: Typeahead response — extends SearchV2Response with metadata fields
+ * that are only present in typeahead mode or when searching by AION-N key.
+ *
+ * - `direct_match`: A-FR-001, populated when query matches AION-N ticket ID.
+ *   Key absent (omitted by backend model_serializer) means no match.
+ * - `combined`: merged globally-ranked list (≤ 15 items), present only when
+ *   mode=typeahead. Key absent in mode=v2.
+ */
+export interface TypeaheadResponse extends SearchV2Response {
+  /**
+   * A-FR-001: populated when the query matches an AION-N ticket ID.
+   * Key is absent (omitted by backend model_serializer) when there is no match.
+   * Treat absent key as null — both forms are valid.
+   */
+  direct_match?: SearchItem | null;
+  /**
+   * A-FR-002: merged globally-ranked list of length ≤ 15, present only in
+   * typeahead mode. Key is absent in mode=v2 (default).
+   */
+  combined?: SearchItem[];
+}
+
+/**
+ * Runtime predicate guard for TypeaheadResponse.
+ *
+ * Accepts direct_match as absent (key omitted) OR null (explicit null) OR a
+ * valid SearchItem. All other arm fields (tickets, problems, …) are loosely
+ * typed — their shape is validated downstream by SearchArm guards when needed.
+ */
+function isSearchItem(x: unknown): x is SearchItem {
+  if (x === null || typeof x !== "object") return false;
+  const o = x as Record<string, unknown>;
+  return (
+    typeof o["id"] === "string" &&
+    typeof o["title"] === "string" &&
+    typeof o["subtitle"] === "string" &&
+    typeof o["kind"] === "string" &&
+    typeof o["href"] === "string"
+    // display_id, project_id, status are nullable — not checked for type beyond object guard
+  );
+}
+
+export function isTypeaheadResponse(x: unknown): x is TypeaheadResponse {
+  if (x === null || typeof x !== "object") return false;
+  const o = x as Record<string, unknown>;
+  // direct_match is optional — absent (undefined) or null both mean no match.
+  const dm = o["direct_match"];
+  if (dm !== undefined && dm !== null && !isSearchItem(dm)) return false;
+  // combined is optional — absent in mode=v2; array of SearchItem in mode=typeahead.
+  const combined = o["combined"];
+  if (combined !== undefined) {
+    if (!Array.isArray(combined)) return false;
+    for (const item of combined) {
+      if (!isSearchItem(item)) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * A2b: Stable iteration order for typeahead arms — groups appear in the
+ * dropdown in this sequence (descending entity weight).
+ *
+ * ticket > problem > component > label > user > agent
+ */
+export const TYPEAHEAD_ARM_ORDER: SearchArmKey[] = [
+  "tickets",
+  "problems",
+  "components",
+  "labels",
+  "users",
+];
+
+/**
+ * A1b: Typeahead search helper. Calls /api/search/v2 with a guard-validated
+ * response. Used by GlobalSearchBar for Cmd-K direct-match navigation.
+ *
+ * @param q - Search query string.
+ * @param signal - AbortSignal to cancel in-flight requests.
+ * @param entity - A4: optional entity scope filter. Defaults to "all".
+ */
+export async function searchTypeahead(
+  q: string,
+  signal?: AbortSignal,
+  entity: SearchEntity = "all",
+): Promise<TypeaheadResponse> {
+  const usp = new URLSearchParams();
+  usp.set("q", q);
+  usp.set("mode", "typeahead");
+  usp.set("entity", entity);
+  usp.set("limit", "5");
+
+  const res = await fetch(`/api/search/v2?${usp.toString()}`, {
+    credentials: "include",
+    signal,
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const { parseApiError } = await import("./errors");
+    const { ApiError } = await import("./tickets");
+    const parsed = parseApiError(res, body);
+    throw new ApiError(res.status, {
+      code: parsed.code,
+      message: parsed.message,
+      details: (parsed.details ?? undefined) as Record<string, unknown> | undefined,
+      correlation_id: parsed.correlation_id ?? undefined,
+    });
+  }
+
+  return await parseJson<TypeaheadResponse>(res, isTypeaheadResponse);
 }
 
 export interface SearchV2Params {

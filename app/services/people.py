@@ -26,14 +26,17 @@ common case index-friendly.
 """
 from __future__ import annotations
 
-from typing import Any, Iterable
+import re
+from typing import Any, Iterable, Literal
 from uuid import UUID
 
 from sqlalchemy import or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.agent_account import AgentAccount
 from app.models.project import ProjectMember
+from app.models.ticket_notification import TicketNotification
 from app.models.user import User
 
 
@@ -361,4 +364,289 @@ async def resolve_mentions(
         seen.add(key)
         out.append(ref)
     return out
+
+
+# ---------------------------------------------------------------------------
+# V2a — unified body-mention fanout + mention-candidates listing.
+#
+# ``emit_body_mentions`` is the single seam used by problem/ticket/comment
+# write paths to:
+#   1. parse ``@handle`` tokens out of a body string,
+#   2. resolve them to user/agent PersonRefs via ``resolve_mentions``,
+#   3. INSERT one ``ticket_notifications`` row per resolved recipient (kind=
+#      ``ticket_mention``).
+#
+# Note on ``comment_id``: the schema column is nullable. We pass the comment
+# UUID for comment-body mentions and ``None`` for problem-/ticket-body
+# mentions. The existing partial-unique idempotency index on
+# ``(comment_id, recipient_type, recipient_id) WHERE kind='ticket_mention'``
+# only dedups comment-bodies (NULLs are distinct in Postgres); body-mentions
+# always insert, which is the desired contract for V2a (re-saving a ticket
+# body is rare and we want the mention to surface again).
+# ---------------------------------------------------------------------------
+
+
+# V2a — single-@ ticket_mention parser.
+# V2b — double-@ ``@@handle`` is the human-review sub-kind. The double-@
+# regex must run FIRST so its tokens don't get re-matched as single-@; the
+# single-@ regex uses a negative lookbehind ``(?<!@)`` so the second @ of a
+# ``@@alice`` token is not picked up by it.
+_HUMAN_REVIEW_BODY_RE = re.compile(r"@@([A-Za-z0-9_-]+)")
+_MENTION_BODY_RE = re.compile(r"(?<!@)@([A-Za-z0-9_-]+)")
+_EXCERPT_MAX = 140
+
+
+def _extract_handles(body: str) -> list[str]:
+    """Return single-@ ``@handle`` tokens in document order, deduped
+    (case-insensitive). Double-@ ``@@handle`` tokens are NOT returned.
+    """
+    if not body:
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for h in _MENTION_BODY_RE.findall(body):
+        low = h.lower()
+        if low in seen:
+            continue
+        seen.add(low)
+        out.append(h)
+    return out
+
+
+def _extract_human_review_handles(body: str) -> list[str]:
+    """Return double-@ ``@@handle`` tokens in document order, deduped."""
+    if not body:
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for h in _HUMAN_REVIEW_BODY_RE.findall(body):
+        low = h.lower()
+        if low in seen:
+            continue
+        seen.add(low)
+        out.append(h)
+    return out
+
+
+def _excerpt_body(body: str) -> str:
+    body = (body or "").strip()
+    if len(body) <= _EXCERPT_MAX:
+        return body
+    return body[: _EXCERPT_MAX - 1].rstrip() + "…"
+
+
+async def emit_body_mentions(
+    session: "AsyncSession",
+    *,
+    body: str,
+    actor_type: Literal["user", "agent"],
+    actor_id: UUID,
+    target_id: UUID,
+    target_display_id: str | None,
+    comment_id: UUID | None = None,
+) -> list[UUID]:
+    """Parse ``@handle`` tokens in ``body``, resolve, and INSERT mention rows.
+
+    Returns the recipient ids that received a notification (self-mentions
+    and unresolved handles are skipped). Idempotent at the schema level
+    for comment-bodies; body-bodies (comment_id is None) always insert.
+    """
+    # V2b: parse double-@ FIRST so the human-review recipients claim those
+    # (kind, id) pairs before single-@ mentions can. A user named in BOTH
+    # ``@@alice`` and ``@alice`` (degenerate input) is treated as
+    # human-review-only.
+    hr_handles = _extract_human_review_handles(body)
+    mention_handles = _extract_handles(body)
+    if not hr_handles and not mention_handles:
+        return []
+    hr_refs = await resolve_mentions(session, hr_handles) if hr_handles else []
+    mention_refs = (
+        await resolve_mentions(session, mention_handles) if mention_handles else []
+    )
+    if not hr_refs and not mention_refs:
+        return []
+
+    excerpt = _excerpt_body(body)
+    emitted: list[UUID] = []
+    seen: set[tuple[str, UUID]] = set()
+
+    async def _emit_one(r: dict, *, notif_kind: str) -> None:
+        rkind_raw = r.get("kind")
+        rid_raw = r.get("id")
+        if rkind_raw not in ("user", "agent") or rid_raw is None:
+            return
+        rkind: str = rkind_raw
+        if isinstance(rid_raw, UUID):
+            rid: UUID = rid_raw
+        else:
+            try:
+                rid = UUID(str(rid_raw))
+            except (ValueError, TypeError):
+                return
+        key = (rkind, rid)
+        if key in seen:
+            return
+        seen.add(key)
+        # Skip self-mentions for both kinds.
+        if rkind == actor_type and rid == actor_id:
+            return
+
+        stmt = pg_insert(TicketNotification).values(
+            kind=notif_kind,
+            recipient_type=rkind,
+            recipient_id=rid,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            target_type="ticket",
+            target_id=target_id,
+            target_display_id=target_display_id,
+            comment_id=comment_id,
+            excerpt=excerpt,
+        )
+        if comment_id is not None and notif_kind == "ticket_mention":
+            # Comment-body mentions dedup against the existing partial unique
+            # index — re-saving the same comment is a no-op. The index is
+            # ``WHERE kind='ticket_mention'`` so human_review rows do not
+            # participate.
+            stmt = stmt.on_conflict_do_nothing(
+                index_elements=["comment_id", "recipient_type", "recipient_id"],
+                index_where=TicketNotification.__table__.c.kind == "ticket_mention",
+            )
+        await session.execute(stmt)
+        emitted.append(rid)
+
+    for r in hr_refs:
+        await _emit_one(r, notif_kind="human_review")
+    for r in mention_refs:
+        await _emit_one(r, notif_kind="ticket_mention")
+
+    # V4c — side-effect: when a single-@ mention resolves to an
+    # ``AgentAccount`` AND the body originates from a ticket COMMENT
+    # (``comment_id is not None``), enqueue an ``agent_run`` so the
+    # provider posts the agent's reply back to the same ticket.  The
+    # queue's idempotency key (sha256 of ``agent_id:ticket_id:prompt``)
+    # collapses re-saves of the same comment body to a single row.
+    if comment_id is not None and mention_refs:
+        agent_targets = [
+            r for r in mention_refs if r.get("kind") == "agent"
+        ]
+        if agent_targets:
+            # Local import keeps the circular-import surface tight —
+            # ``agent_run_queue`` imports ``agent_provider`` which is
+            # ORM-heavy and not needed by the rest of ``people.py``.
+            from app.services.agent_run_queue import (
+                AgentRunQueue,
+                get_default_queue,
+            )
+
+            queue: AgentRunQueue = get_default_queue(session)
+            for ref in agent_targets:
+                aid_raw = ref.get("id")
+                if isinstance(aid_raw, UUID):
+                    aid: UUID = aid_raw
+                else:
+                    try:
+                        aid = UUID(str(aid_raw))
+                    except (ValueError, TypeError):
+                        continue
+                handle = ref.get("handle") or ""
+                prompt = f"@{handle} {body}" if handle else body
+                await queue.enqueue(
+                    session,
+                    agent_id=aid,
+                    ticket_id=target_id,
+                    comment_id=comment_id,
+                    prompt=prompt,
+                )
+
+    if emitted:
+        await session.flush()
+    return emitted
+
+
+async def list_mention_candidates(
+    session: "AsyncSession",
+    *,
+    project_id: UUID,
+    prefix: str,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """Return user+agent members of ``project_id`` whose handle/name has
+    ``prefix`` as a case-insensitive prefix. Cap at ``limit`` (default 20).
+
+    Discriminator: ``type='user'`` for human members, ``type='agent'`` for
+    agent members. Used by the @mention autocomplete dropdown.
+    """
+    if limit < 1:
+        limit = 1
+    if limit > 50:
+        limit = 50
+
+    needle = (prefix or "").strip()
+    like = f"{needle}%" if needle else "%"
+
+    # User members of the project.
+    user_stmt = (
+        select(User.id, User.handle, User.display_name)
+        .join(
+            ProjectMember,
+            (ProjectMember.member_id == User.id)
+            & (ProjectMember.member_type == "user"),
+        )
+        .where(ProjectMember.project_id == project_id)
+        .where(User.is_active.is_(True))
+    )
+    if needle:
+        user_stmt = user_stmt.where(
+            or_(
+                User.handle.ilike(like),
+                User.display_name.ilike(like),
+            )
+        )
+    user_stmt = user_stmt.order_by(User.display_name.asc()).limit(limit)
+    user_rows = (await session.execute(user_stmt)).all()
+
+    # Agent members of the project.
+    agent_stmt = (
+        select(AgentAccount.id, AgentAccount.handle, AgentAccount.name)
+        .join(
+            ProjectMember,
+            (ProjectMember.member_id == AgentAccount.id)
+            & (ProjectMember.member_type == "agent"),
+        )
+        .where(ProjectMember.project_id == project_id)
+        .where(AgentAccount.active.is_(True))
+    )
+    if needle:
+        agent_stmt = agent_stmt.where(
+            or_(
+                AgentAccount.handle.ilike(like),
+                AgentAccount.name.ilike(like),
+            )
+        )
+    agent_stmt = agent_stmt.order_by(AgentAccount.name.asc()).limit(limit)
+    agent_rows = (await session.execute(agent_stmt)).all()
+
+    out: list[dict[str, Any]] = []
+    for uid, handle, display in user_rows:
+        out.append(
+            {
+                "type": "user",
+                "id": uid,
+                "handle": handle or "",
+                "display_name": display or "",
+            }
+        )
+    for aid, handle, name in agent_rows:
+        out.append(
+            {
+                "type": "agent",
+                "id": aid,
+                "handle": handle or "",
+                "display_name": name or "",
+            }
+        )
+    # Stable sort by display_name within the cap.
+    out.sort(key=lambda r: (r["display_name"].lower(), str(r["id"])))
+    return out[:limit]
 

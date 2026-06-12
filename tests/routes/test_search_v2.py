@@ -164,8 +164,9 @@ async def test_empty_q_returns_empty_arms(db):
 
 
 @pytest.mark.asyncio
-async def test_entity_all_returns_all_five_arms(db, user, project):
-    """entity=all returns exactly the five canonical arm keys."""
+async def test_entity_all_returns_all_seven_arms(db, user, project):
+    """entity=all returns exactly the seven canonical arm keys (v2.29-S6
+    added share_posts + bounties)."""
     token = uuid.uuid4().hex
     await _seed_problem(db, author_id=user, title=f"allmatch {token}")
     await db.flush()
@@ -176,7 +177,15 @@ async def test_entity_all_returns_all_five_arms(db, user, project):
 
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body.keys()) == {"problems", "tickets", "components", "labels", "users"}
+    assert set(body.keys()) == {
+        "problems",
+        "tickets",
+        "components",
+        "labels",
+        "users",
+        "share_posts",
+        "bounties",
+    }
 
 
 @pytest.mark.asyncio

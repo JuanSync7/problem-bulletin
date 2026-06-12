@@ -20,6 +20,8 @@ import type { ProjectDTO } from "../api/projects";
 import { listProjects } from "../api/projects";
 import { KindPill } from "../components/KindPill";
 import { useSearchV2 } from "../hooks/useSearchV2";
+import { useRecentSearches } from "../components/GlobalSearchBar/useRecentSearches";
+import { useAuth } from "../hooks/useAuth";
 import "./Search.css";
 
 // ---------------------------------------------------------------------------
@@ -37,6 +39,9 @@ const TABS: { id: SearchEntity; label: string }[] = [
   { id: "components", label: "Components" },
   { id: "labels", label: "Labels" },
   { id: "users", label: "Users" },
+  // v2.29-S6: Share / Bounty spaces
+  { id: "share_posts", label: "Share" },
+  { id: "bounties", label: "Bounties" },
 ];
 
 // WP11: validated entity IDs for URL→state seeding.
@@ -182,6 +187,8 @@ function AllTabView({ data, onNavigate }: AllTabProps) {
     { key: "components", label: "Components" },
     { key: "labels", label: "Labels" },
     { key: "users", label: "Users" },
+    { key: "share_posts", label: "Share" },
+    { key: "bounties", label: "Bounties" },
   ];
 
   return (
@@ -279,6 +286,11 @@ const PAGE_SIZE = 20;
 export default function Search() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // v2.29-S6 (audit P2#17): recent searches share the same localStorage
+  // store as GlobalSearchBar (key: aion.search.recents.<userId>).
+  const { user } = useAuth();
+  const { recents } = useRecentSearches(user?.id ?? "anon");
 
   // WP11: derive initial state from URL params (seed once on mount; later
   // edits flow state → URL via the sync effect below). Invalid enum values
@@ -609,6 +621,27 @@ export default function Search() {
           <p className="search-page__empty-description">
             Type a query above to find problems, tickets, components, labels, and users.
           </p>
+          {recents.length > 0 && (
+            <div
+              className="search-page__recents"
+              role="group"
+              aria-label="Recent searches"
+            >
+              <span className="search-page__recents-label">Recent searches</span>
+              <div className="search-page__recents-chips">
+                {recents.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    className="search-page__recent-chip"
+                    onClick={() => setQuery(q)}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -650,7 +683,9 @@ function getTabCount(tab: SearchEntity, data: SearchV2Response | null): number |
       (data.tickets?.total ?? 0) +
       (data.components?.total ?? 0) +
       (data.labels?.total ?? 0) +
-      (data.users?.total ?? 0);
+      (data.users?.total ?? 0) +
+      (data.share_posts?.total ?? 0) +
+      (data.bounties?.total ?? 0);
     return total;
   }
   return data[tab as keyof SearchV2Response]?.total ?? null;

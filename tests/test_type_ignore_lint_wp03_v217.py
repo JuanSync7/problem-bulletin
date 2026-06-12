@@ -102,7 +102,7 @@ _OFFENDER_ALLOWLIST: dict[str, str] = {
         "deliberate import-time shim."
     ),
     # --- BY-DESIGN: noqa ----------------------------------------------------
-    "app/main.py:134": (
+    "app/main.py:138": (
         "BY-DESIGN: local re-import of ``async_session_factory`` inside the "
         "lifespan startup path so the symbol is resolved lazily; ``F811`` "
         "(redefinition) is the expected lint we suppress."
@@ -136,6 +136,10 @@ _OFFENDER_ALLOWLIST: dict[str, str] = {
     "app/models/__init__.py:43": "BY-DESIGN: model re-export barrel; F401 is the side effect.",
     "app/models/__init__.py:46": "BY-DESIGN: model re-export barrel; F401 is the side effect.",
     "app/models/__init__.py:47": "BY-DESIGN: model re-export barrel; F401 is the side effect.",
+    "app/models/__init__.py:50": "BY-DESIGN: model re-export barrel; F401 is the side effect.",
+    "app/models/__init__.py:53": "BY-DESIGN: model re-export barrel; F401 is the side effect.",
+    "app/models/__init__.py:56": "BY-DESIGN: model re-export barrel; F401 is the side effect.",
+    "app/models/__init__.py:59": "BY-DESIGN: model re-export barrel; F401 is the side effect.",
     "app/schemas/__init__.py:10": (
         "BY-DESIGN: ``from app.schemas._legacy import *`` is the schemas "
         "barrel for legacy DTOs awaiting per-entity migration; ``F401,F403`` "

@@ -178,3 +178,25 @@ class ComponentRead(BaseModel):
     lead_type: Literal["user", "agent"] | None = None
     created_at: datetime
     updated_at: datetime | None = None
+
+
+# ---------------------------------------------------------------------------
+# Project lessons (V6a) — append-only
+# ---------------------------------------------------------------------------
+
+class ProjectLessonCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    body: str = Field(..., min_length=1, max_length=20000)
+
+
+class ProjectLessonRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    project_id: UUID
+    author_user_id: UUID | None = None
+    author_agent_id: UUID | None = None
+    source: Literal["user", "agent"]
+    title: str
+    body: str
+    created_at: datetime

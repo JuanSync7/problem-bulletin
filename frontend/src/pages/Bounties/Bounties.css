@@ -1,0 +1,341 @@
+/* Bounty space (v2.29-S4) — Instrument palette tokens from App.css */
+
+.bounties-page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+.bounties-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.bounties-page__title {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  color: var(--color-text);
+  margin: 0 0 4px;
+}
+
+.bounties-page__subtitle {
+  color: var(--color-text);
+  opacity: 0.65;
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.bounties-page__new-btn {
+  background: var(--color-primary-start);
+  color: #fff;
+  border: none;
+  border-radius: var(--card-radius);
+  padding: 8px 16px;
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bounties-page__new-btn:hover {
+  filter: brightness(1.08);
+}
+
+/* --- status filter pills --- */
+
+.bounties-page__filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.bounties-page__pill {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 4px 14px;
+  font-size: 0.85rem;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.bounties-page__pill:hover {
+  border-color: var(--color-primary-start);
+  color: var(--color-primary-start);
+}
+
+.bounties-page__pill--active {
+  border-color: var(--color-primary-start);
+  background: color-mix(in srgb, var(--color-primary-start) 12%, transparent);
+  color: var(--color-primary-start);
+  font-weight: 600;
+}
+
+.bounties-page__error {
+  border: 1px solid #c2410c55;
+  background: #c2410c11;
+  color: #c2410c;
+  border-radius: var(--card-radius);
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 0.9rem;
+}
+
+.bounties-page__loading {
+  color: var(--color-text);
+  opacity: 0.6;
+  padding: 32px 0;
+  text-align: center;
+}
+
+.bounties-page__list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* --- card --- */
+
+.bounty-card {
+  display: flex;
+  gap: 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--card-radius);
+  padding: 16px 18px;
+  transition: box-shadow 120ms ease;
+}
+
+.bounty-card:hover {
+  box-shadow: var(--card-shadow-hover);
+}
+
+.bounty-card__points {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-star);
+  background: color-mix(in srgb, var(--color-star) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-star) 45%, transparent);
+  border-radius: var(--card-radius);
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+
+.bounty-card__main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.bounty-card__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.bounty-card__status {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  padding: 2px 10px;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  opacity: 0.8;
+}
+
+.bounty-card__status--open {
+  border-color: var(--color-primary-start);
+  color: var(--color-primary-start);
+  opacity: 1;
+}
+
+.bounty-card__status--claimed {
+  border-color: var(--agent-border);
+  color: var(--agent-fg);
+  background: var(--agent-bg);
+  opacity: 1;
+}
+
+.bounty-card__status--awarded {
+  border-color: color-mix(in srgb, var(--color-star) 60%, transparent);
+  color: var(--color-star);
+  opacity: 1;
+}
+
+.bounty-card__link {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--color-primary-start);
+  text-decoration: none;
+  border: 1px solid var(--color-primary-start);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.bounty-card__time {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--color-text);
+  opacity: 0.55;
+}
+
+.bounty-card__title {
+  font-family: var(--font-display);
+  font-size: 1.08rem;
+  color: var(--color-text);
+  margin: 0 0 6px;
+}
+
+.bounty-card__description {
+  color: var(--color-text);
+  opacity: 0.85;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  margin: 0 0 10px;
+  white-space: pre-wrap;
+}
+
+.bounty-card__people {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.88rem;
+  color: var(--color-text);
+  margin-bottom: 10px;
+}
+
+.bounty-card__poster {
+  font-weight: 600;
+}
+
+.bounty-card__arrow {
+  opacity: 0.5;
+}
+
+.bounty-card__claimant {
+  font-weight: 600;
+}
+
+.bounty-card__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.bounty-card__btn {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 4px 16px;
+  font-size: 0.85rem;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.bounty-card__btn:hover {
+  border-color: var(--color-primary-start);
+  color: var(--color-primary-start);
+}
+
+.bounty-card__btn--claim {
+  border-color: var(--color-primary-start);
+  color: var(--color-primary-start);
+}
+
+.bounty-card__btn--award {
+  border-color: color-mix(in srgb, var(--color-star) 60%, transparent);
+  color: var(--color-star);
+  font-weight: 600;
+}
+
+/* --- inline new-bounty form --- */
+
+.bounty-form {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--card-radius);
+  padding: 16px 18px;
+  margin-bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bounty-form__input,
+.bounty-form__textarea {
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--card-radius) / 2);
+  padding: 8px 12px;
+}
+
+.bounty-form__input:focus,
+.bounty-form__textarea:focus {
+  outline: none;
+  border-color: var(--color-primary-start);
+}
+
+.bounty-form__textarea {
+  resize: vertical;
+}
+
+.bounty-form__row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bounty-form__points-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--color-text);
+  opacity: 0.8;
+}
+
+.bounty-form__points {
+  width: 96px;
+}
+
+.bounty-form__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.bounty-form__submit {
+  background: var(--color-primary-start);
+  color: #fff;
+  border: none;
+  border-radius: calc(var(--card-radius) / 2);
+  padding: 8px 18px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.bounty-form__submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.bounty-form__cancel {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--card-radius) / 2);
+  padding: 8px 18px;
+  font-size: 0.9rem;
+  color: var(--color-text);
+  cursor: pointer;
+}

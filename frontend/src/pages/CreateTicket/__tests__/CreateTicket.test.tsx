@@ -241,6 +241,28 @@ describe("CreateTicket", () => {
     });
   });
 
+  it("v2.29: prefills title and description from query params", async () => {
+    const title = "Fix the login problem";
+    const description =
+      "Created from problem: http://localhost/problems/p-1\n\nUsers cannot log in.";
+    renderPage(
+      `/tickets/new?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`,
+    );
+
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText(/Project/) as HTMLSelectElement).value,
+      ).toBe("DEF");
+    });
+
+    expect(
+      (screen.getByLabelText(/Title/) as HTMLInputElement).value,
+    ).toBe(title);
+    expect(
+      (screen.getByTestId("rich-editor") as HTMLTextAreaElement).value,
+    ).toBe(description);
+  });
+
   it("surfaces cross-project parent toast on 409", async () => {
     const user = userEvent.setup();
     (ticketsApi.createTicket as ReturnType<typeof vi.fn>).mockRejectedValue(

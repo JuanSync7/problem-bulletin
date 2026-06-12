@@ -23,19 +23,30 @@ export default defineConfig({
     },
   },
   server: {
+    port: 28173,
+    strictPort: true,
     allowedHosts: true,
+    hmr: {
+      clientPort: 28173,
+      protocol: "ws",
+    },
     proxy: {
+      "/api/v1/realtime/ws": {
+        target: "ws://localhost:28080",
+        ws: true,
+        rewrite: (p) => p,
+      },
       "/api/ws": {
-        target: "ws://localhost:8000",
+        target: "ws://localhost:28080",
         ws: true,
         rewrite: (p) => p,
       },
       "/api": {
-        target: "http://localhost:8000",
+        target: "http://localhost:28080",
         changeOrigin: true,
       },
       "/ws": {
-        target: "http://localhost:8000",
+        target: "http://localhost:28080",
         ws: true,
       },
     },

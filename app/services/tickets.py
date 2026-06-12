@@ -1199,6 +1199,43 @@ class TicketService:
                 ticket_title=ticket.title,
             )
 
+        # V4b — when the new assignee is an agent, enqueue an agent_run.
+        # The queue runs the provider on a later ``POST /agent-runs/process-
+        # next`` call; here we only durably record the work item.  The
+        # queue's idempotency key dedups re-assignments of the same agent
+        # to the same ticket with the same prompt.
+        # We only enqueue when the target agent row actually exists.  The
+        # ``ticket.assignee_id`` column has no FK to ``agent_accounts``
+        # (the same column also holds user ids for human assignees), so
+        # callers can assign to a non-existent agent id without violating
+        # any constraint — but the ``agent_run.agent_id`` FK would reject
+        # such a row and poison the surrounding transaction.
+        if (
+            _assignee_changed
+            and assignee_type == "agent"
+            and assignee_id is not None
+        ):
+            from app.models.agent_account import AgentAccount as _AgentAccount
+            from app.services.agent_run_queue import get_default_queue
+            _agent_exists = (
+                await session.execute(
+                    select(_AgentAccount.id).where(
+                        _AgentAccount.id == assignee_id
+                    )
+                )
+            ).scalar_one_or_none()
+            if _agent_exists is not None:
+                prompt_text = (
+                    f"{ticket.title}\n\n{ticket.description or ''}"
+                ).strip()
+                await get_default_queue(session).enqueue(
+                    session,
+                    agent_id=assignee_id,
+                    ticket_id=ticket.id,
+                    comment_id=None,
+                    prompt=prompt_text,
+                )
+
         return ticket
 
     @traced(action="claim")
@@ -1278,10 +1315,28 @@ class TicketService:
         body: str,
         mentions: Sequence[UUID] | None = None,
         correlation_id: str = "",
+        parent_comment_id: UUID | None = None,
     ) -> TicketComment:
         if not body or not body.strip():
             raise ValidationError([{"name": "body", "reason": "required"}])
         ticket = await self._load(session, ticket_id)
+
+        # v7a: same-ticket invariant for nested replies.
+        if parent_comment_id is not None:
+            parent = (
+                await session.execute(
+                    select(TicketComment).where(
+                        TicketComment.id == parent_comment_id
+                    )
+                )
+            ).scalar_one_or_none()
+            if parent is None or parent.ticket_id != ticket.id:
+                raise ValidationError(
+                    [{
+                        "name": "parent_comment_id",
+                        "reason": "must reference a comment on the same ticket",
+                    }]
+                )
 
         actor_type_value = _actor_type_str(actor)
         step_id = (
@@ -1326,6 +1381,7 @@ class TicketService:
 
         comment = TicketComment(
             ticket_id=ticket.id,
+            parent_comment_id=parent_comment_id,
             author_id=actor.id,
             author_type=actor_type_value,
             body=body,

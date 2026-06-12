@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, lazy, Suspense } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { StatusBadge } from "../components/StatusBadge";
 import { useAuth } from "../hooks/useAuth";
 import { useAnonymousMode } from "../hooks/useAnonymousMode";
@@ -151,11 +151,11 @@ const ALL_STATUSES: { value: ProblemStatus; label: string }[] = [
 ];
 
 const SOLUTION_STATUSES = [
-  { value: "pending", label: "Pending", color: "#9CA3AF" },
-  { value: "under_review", label: "Under Review", color: "#F59E0B" },
-  { value: "verified", label: "Verified", color: "#3B82F6" },
-  { value: "accepted", label: "Accepted", color: "#22C55E" },
-  { value: "rejected", label: "Rejected", color: "#EF4444" },
+  { value: "pending", label: "Pending", color: "#8B8779" },
+  { value: "under_review", label: "Under Review", color: "#B07A0C" },
+  { value: "verified", label: "Verified", color: "#2D6FB0" },
+  { value: "accepted", label: "Accepted", color: "#1F8A4C" },
+  { value: "rejected", label: "Rejected", color: "#C2453A" },
 ];
 
 /* ===========================
@@ -1436,6 +1436,18 @@ export default function ProblemDetail() {
           ) : (
             <StatusBadge status={problem.status} />
           )}
+          {/* v2.29 S5 (audit P1#5) — Problem→Ticket bridge. Prefills the
+              ticket form with the problem title and a back-link so the
+              ticket stays traceable to its originating problem. */}
+          <Link
+            className="problem-detail__create-ticket-link"
+            data-testid="create-ticket-from-problem"
+            to={`/tickets/new?title=${encodeURIComponent(problem.title)}&description=${encodeURIComponent(
+              `Created from problem: ${window.location.origin}/problems/${problem.id}\n\n${problem.description ?? ""}`,
+            )}`}
+          >
+            Create Ticket from Problem
+          </Link>
         </div>
 
         <div className="problem-detail__sidebar-actions">

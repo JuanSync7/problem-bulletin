@@ -1,29 +1,32 @@
+/* "Instrument" palette (v2.29 redesign) — warm paper / graphite ink,
+   single deep-viridian accent. Minimal, precise, quiet. */
+
 export const gradients = {
   primary: {
-    light: { start: "#006400", end: "#32CD32" },
-    dark: { start: "#FFD700", end: "#32CD32" },
+    light: { start: "#156B5E", end: "#1F8A77" },
+    dark: { start: "#2BA08C", end: "#3DBFA8" },
   },
 } as const;
 
 export const lightColors = {
-  bg: "#E4D9C5",
-  surface: "#EDE4D4",
-  text: "#1A1207",
-  textSecondary: "#5A4E3A",
-  border: "#C4B89E",
+  bg: "#F7F5F0",
+  surface: "#FFFFFF",
+  text: "#1C1B17",
+  textSecondary: "#5C594F",
+  border: "#E3E0D6",
 } as const;
 
 export const darkColors = {
-  bg: "#121212",
-  surface: "#1E1E1E",
-  text: "#E0E0E0",
-  textSecondary: "#9CA3AF",
-  border: "#374151",
+  bg: "#131312",
+  surface: "#1B1B19",
+  text: "#E8E6DF",
+  textSecondary: "#A8A496",
+  border: "#33322D",
 } as const;
 
 export const statusColors = {
-  success: "#22C55E",
-  warning: "#F59E0B",
-  error: "#EF4444",
-  info: "#3B82F6",
+  success: "#1F8A4C",
+  warning: "#B07A0C",
+  error: "#C2453A",
+  info: "#2D6FB0",
 } as const;

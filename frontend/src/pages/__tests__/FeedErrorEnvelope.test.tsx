@@ -15,6 +15,7 @@
  */
 import "@testing-library/jest-dom";
 import { render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import Feed from "../Feed";
@@ -59,7 +60,13 @@ describe("Feed — parseApiError envelope handling", () => {
       },
     });
 
-    render(<Feed />);
+    // Feed's header now renders a <Link> CTA (v2.29 IA), so it needs
+    // router context to mount.
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Feed />
+      </MemoryRouter>,
+    );
 
     // The page-level error region uses role="alert" and renders the
     // captured message verbatim. parseApiError extracts `message` from

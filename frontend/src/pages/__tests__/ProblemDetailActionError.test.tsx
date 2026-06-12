@@ -183,6 +183,26 @@ describe("ProblemDetail — v2.15-WP03 action-error surface", () => {
     });
   });
 
+  // v2.29 S5 (audit P1#5) — Problem→Ticket bridge: the sidebar renders a
+  // "Create Ticket from Problem" link that deep-links to /tickets/new
+  // with URL-encoded title + back-link description prefill params.
+  it("renders the Create Ticket from Problem link with prefill params", async () => {
+    installFetchMock([
+      { pattern: "/api/auth/me", status: 401, body: {} },
+      { pattern: /\/api\/problems\/p-1$/, method: "GET", status: 200, body: SAMPLE_PROBLEM },
+    ]);
+
+    renderProblemDetail();
+
+    const link = await screen.findByTestId("create-ticket-from-problem");
+    expect(link).toHaveTextContent(/create ticket from problem/i);
+    const href = link.getAttribute("href") ?? "";
+    expect(href).toContain("/tickets/new?");
+    expect(href).toContain(`title=${encodeURIComponent("Sample problem")}`);
+    expect(href).toContain(encodeURIComponent("/problems/p-1"));
+    expect(href).toContain(encodeURIComponent("Body"));
+  });
+
   // Site 4 (action: dismiss). The banner is dismissible — clicking the
   // dismiss button clears it. Proves the action-error surface is a
   // proper state-driven UI element, not a fire-and-forget toast.

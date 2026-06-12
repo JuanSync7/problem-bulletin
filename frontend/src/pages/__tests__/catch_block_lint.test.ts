@@ -103,7 +103,7 @@ const _OFFENDER_ALLOWLIST: OffenderEntry[] = [
   // page-load failure.
   {
     file: "frontend/src/pages/Search.tsx",
-    line: 350,
+    line: 362,
     kind: "bare",
     justification:
       "BY-DESIGN: categories filter is best-effort enrichment of Search UI; failure leaves dropdown empty; surfacing a toast on every search page-load failure would be noisy and the user can still execute searches",
@@ -114,7 +114,7 @@ const _OFFENDER_ALLOWLIST: OffenderEntry[] = [
   // failure intent before any user-visible error message would).
   {
     file: "frontend/src/pages/Activity/MentionsTab.tsx",
-    line: 246,
+    line: 300,
     kind: "bare",
     justification:
       "BY-DESIGN: optimistic mark-as-read rollback; UI is reverted via setItems so the user sees the failure inline (row stays unread); no separate error surface needed",
@@ -124,14 +124,14 @@ const _OFFENDER_ALLOWLIST: OffenderEntry[] = [
   // not user-actionable; both helpers degrade to in-memory defaults.
   {
     file: "frontend/src/pages/Kanban/index.tsx",
-    line: 39,
+    line: 37,
     kind: "bare",
     justification:
       "BY-DESIGN: localStorage read; falls back to in-memory defaults; failure modes (private mode / disabled storage) are environment-level not user-actionable",
   },
   {
     file: "frontend/src/pages/Kanban/index.tsx",
-    line: 46,
+    line: 44,
     kind: "bare",
     justification:
       "BY-DESIGN: localStorage write is best-effort persistence; failure is environment-level (quota / private mode) not user-actionable",

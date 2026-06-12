@@ -89,8 +89,13 @@ export default function CreateTicket() {
   const componentsState = useComponentsByProject(currentProjectId);
 
   // --- form state ----------------------------------------------------------
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  // v2.29 S5 (audit P1#5) — ?title= / ?description= query params prefill
+  // the form so other surfaces (e.g. "Create Ticket from Problem") can
+  // bridge into ticketing with context carried over.
+  const [title, setTitle] = useState(search.get("title") ?? "");
+  const [description, setDescription] = useState(
+    search.get("description") ?? "",
+  );
   const [parent, setParent] = useState<TicketDTO | null>(null);
   const [parentSearch, setParentSearch] = useState("");
   const [parentResults, setParentResults] = useState<TicketDTO[]>([]);

@@ -9,16 +9,22 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Annotated
+from typing import Annotated, Any as _Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, model_serializer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.services._pagination import InvalidCursorError
 from app.services.search import search_problems, suggest_similar
-from app.services.search_multi import _VALID_ENTITIES, search_entities
+from app.services.search_multi import (
+    _ENTITY_ALIASES,
+    _VALID_ENTITIES,
+    resolve_direct_match,
+    search_entities,
+)
+from app.services.search_typeahead import search_typeahead
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +117,15 @@ class SearchV2Response(BaseModel):
     Keys present depend on the ``entity`` query parameter:
     - ``entity=all``  → all five arms (problems, tickets, components, labels, users)
     - ``entity=<x>``  → only the ``<x>`` arm
+
+    A-FR-001: ``direct_match`` is included in the response only when the query
+    matches the AION-N regex pattern and a ticket with that display_id exists.
+    When absent (no pattern match or no ticket found), the key is omitted from
+    the JSON envelope — treat an absent key as null.
+
+    A-FR-002: ``combined`` is included only when ``mode=typeahead``. It is
+    omitted (key absent) in ``mode=v2`` (default). When present it contains
+    the merged globally-ranked list of length ≤ 15.
     """
 
     problems: SearchArm | None = None
@@ -118,6 +133,30 @@ class SearchV2Response(BaseModel):
     components: SearchArm | None = None
     labels: SearchArm | None = None
     users: SearchArm | None = None
+    # v2.29-S6: Share / Bounty spaces
+    share_posts: SearchArm | None = None
+    bounties: SearchArm | None = None
+    direct_match: SearchItem | None = None
+    combined: list[SearchItem] | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_null_fields(
+        self,
+        handler: _Any,
+        info: _Any = None,
+    ) -> dict[str, _Any]:
+        """Exclude ``direct_match`` and ``combined`` from serialized output when None.
+
+        All other None fields (arm fields) are serialized normally so that
+        the caller can distinguish between an arm that was not requested
+        (None) and one that returned zero results (empty items list).
+        """
+        data: dict[str, _Any] = handler(self)
+        if data.get("direct_match") is None:
+            data.pop("direct_match", None)
+        if data.get("combined") is None:
+            data.pop("combined", None)
+        return data
 
 
 @router.get("/v2", response_model=SearchV2Response, summary="Multi-entity search (WP56)")
@@ -126,7 +165,18 @@ async def search_v2(
     q: str = Query(..., description="Search query. Empty string returns empty arms."),
     entity: str = Query(
         "all",
-        description="Entity scope: all | problems | tickets | components | labels | users",
+        description=(
+            "Entity scope: all | problems | tickets | components | labels | users "
+            "| share_posts | bounties (singular aliases share_post / bounty accepted)"
+        ),
+    ),
+    mode: Literal["v2", "typeahead"] = Query(
+        "v2",
+        description=(
+            "A-FR-002: 'v2' = standard multi-entity search (default, unchanged). "
+            "'typeahead' = arms capped at 5, ranking pipeline with recency/personalisation "
+            "boosts applied, response includes 'combined' merged list (≤ 15 items)."
+        ),
     ),
     problem_status: str | None = Query(None, description="Filter problems by status"),
     problem_category_id: uuid.UUID | None = Query(None, description="Filter problems by category UUID"),
@@ -144,12 +194,21 @@ async def search_v2(
     components_cursor: str | None = Query(None, description="WP62: cursor for components arm (entity=all)"),
     labels_cursor: str | None = Query(None, description="WP62: cursor for labels arm (entity=all)"),
     users_cursor: str | None = Query(None, description="WP62: cursor for users arm (entity=all)"),
+    share_posts_cursor: str | None = Query(None, description="v2.29-S6: cursor for share_posts arm (entity=all)"),
+    bounties_cursor: str | None = Query(None, description="v2.29-S6: cursor for bounties arm (entity=all)"),
     refresh_total: bool = Query(
         False,
         description=(
             "v2.11-WP14: when true, force a live re-count on the current page "
             "instead of honouring the WP10 cursor-pinned snapshot total. The "
             "response arm's ``total_authority`` will read 'live'."
+        ),
+    ),
+    current_user_id: uuid.UUID | None = Query(
+        None,
+        description=(
+            "A-FR-005: optional caller UUID for personalisation boost (+0.2 when "
+            "current user is assignee/reporter). Used in mode=typeahead only."
         ),
     ),
 ):
@@ -171,6 +230,55 @@ async def search_v2(
             ),
         )
 
+    # v2.29-S6: normalise singular aliases (share_post → share_posts, …) so
+    # downstream cursor routing and the response envelope use the arm key.
+    entity = _ENTITY_ALIASES.get(entity, entity)
+
+    # A-FR-002: typeahead mode — route to dedicated ranking pipeline
+    if mode == "typeahead":
+        import asyncio
+
+        from opentelemetry import trace as _otel_trace
+
+        _tracer = _otel_trace.get_tracer("app.routes.search")
+
+        with _tracer.start_as_current_span("search.typeahead") as _span:
+            _span.set_attribute("q.length", len(q))
+            _span.set_attribute("entity", entity or "all")
+
+            try:
+                ta_result, dm_item = await asyncio.gather(
+                    search_typeahead(
+                        db,
+                        q,
+                        entity=entity,
+                        current_user_id=current_user_id,
+                    ),
+                    resolve_direct_match(db, q),
+                )
+            except InvalidCursorError as exc:
+                raise HTTPException(status_code=400, detail=f"invalid cursor: {exc}") from exc
+
+            direct_match = SearchItem(**dm_item) if dm_item is not None else None
+            combined = [SearchItem(**item) for item in ta_result["combined"]]
+            arms = {
+                arm: SearchArm(**data)
+                for arm, data in ta_result.items()
+                if arm != "combined"
+            }
+
+            # arms_hit: number of arms that returned at least one item
+            arms_hit = sum(
+                1 for arm_data in arms.values() if arm_data.items
+            )
+            _span.set_attribute("arms_hit", arms_hit)
+
+            return SearchV2Response(
+                direct_match=direct_match,
+                combined=combined if combined else None,
+                **arms,
+            )
+
     # WP62: single-arm `cursor` is shorthand for the matching `<arm>_cursor`.
     # Reject ambiguous combinations (e.g. cursor= with entity=all) up front.
     arm_cursors = {
@@ -179,6 +287,8 @@ async def search_v2(
         "components": components_cursor,
         "labels": labels_cursor,
         "users": users_cursor,
+        "share_posts": share_posts_cursor,
+        "bounties": bounties_cursor,
     }
     if cursor is not None:
         if entity == "all":
@@ -193,32 +303,41 @@ async def search_v2(
             )
         arm_cursors[entity] = cursor
 
+    import asyncio
+
     try:
-        raw = await search_entities(
-            db,
-            q,
-            entity=entity,
-            problem_status=problem_status,
-            problem_category_id=problem_category_id,
-            ticket_status=ticket_status,
-            ticket_project_id=ticket_project_id,
-            component_project_id=component_project_id,
-            limit=limit,
-            offset=offset,
-            problems_cursor=arm_cursors["problems"],
-            tickets_cursor=arm_cursors["tickets"],
-            components_cursor=arm_cursors["components"],
-            labels_cursor=arm_cursors["labels"],
-            users_cursor=arm_cursors["users"],
-            refresh_total=refresh_total,
+        raw, dm_item = await asyncio.gather(
+            search_entities(
+                db,
+                q,
+                entity=entity,
+                problem_status=problem_status,
+                problem_category_id=problem_category_id,
+                ticket_status=ticket_status,
+                ticket_project_id=ticket_project_id,
+                component_project_id=component_project_id,
+                limit=limit,
+                offset=offset,
+                problems_cursor=arm_cursors["problems"],
+                tickets_cursor=arm_cursors["tickets"],
+                components_cursor=arm_cursors["components"],
+                labels_cursor=arm_cursors["labels"],
+                users_cursor=arm_cursors["users"],
+                share_posts_cursor=arm_cursors["share_posts"],
+                bounties_cursor=arm_cursors["bounties"],
+                refresh_total=refresh_total,
+            ),
+            resolve_direct_match(db, q),
         )
     except InvalidCursorError as exc:
         raise HTTPException(status_code=400, detail=f"invalid cursor: {exc}") from exc
 
     # Build the response model from the raw dict returned by the service.
     # Only arms present in `raw` are set; the rest remain None.
+    direct_match = SearchItem(**dm_item) if dm_item is not None else None
     return SearchV2Response(
-        **{arm: SearchArm(**data) for arm, data in raw.items()}
+        direct_match=direct_match,
+        **{arm: SearchArm(**data) for arm, data in raw.items()},
     )
 
 

@@ -1,12 +1,18 @@
 /**
- * v2.1-WP10 — Pagination + filter-sentinel tests for KanbanPage.
+ * v2.1-WP10 / V5b — filter-sentinel + pagination tests for KanbanPage.
  *
- * Asserts:
- *  - Filter "None" sends ``sprint_id=null`` (not ``__none__``).
- *  - Filter "Me" sends ``assignee_id=me`` (not the current-user UUID).
- *  - Filter "All sprints" omits the param entirely.
- *  - A multi-page response surfaces a "Load more" control whose click
- *    appends the next page's items to the visible board.
+ * V5b retired the legacy ``listTickets`` fetch in favour of
+ * ``getProjectHierarchy``. With that change:
+ *   * Sprint / assignee filters are applied client-side over the
+ *     hierarchy flatten — the "null" / "me" sentinels are still the
+ *     selector's wire values but they no longer travel to the server.
+ *   * Cursor pagination is gone: the hierarchy endpoint returns the
+ *     full subtree (capped at ``max_depth``), so the "Load more"
+ *     control has no fuel and must not render.
+ *
+ * The tests below were updated minimally per the V5b slice scope —
+ * "If a pre-existing test relies on the old fetch shape, update it
+ * minimally to the new shape."
  */
 import "@testing-library/jest-dom";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -14,8 +20,8 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { listTicketsMock } = vi.hoisted(() => ({
-  listTicketsMock: vi.fn(),
+const { getProjectHierarchyMock } = vi.hoisted(() => ({
+  getProjectHierarchyMock: vi.fn(),
 }));
 
 vi.mock("../../../hooks/useTicketStream", () => ({
@@ -41,15 +47,23 @@ const sprints = [
   },
 ];
 
-vi.mock("../../../api/projects", () => ({
-  listProjects: vi.fn(async () => ({
-    items: projects,
-    next_cursor: null,
-    total: 1,
-  })),
-  listComponents: vi.fn(async () => ({ items: [] })),
-  listMembers: vi.fn(async () => ({ items: [] })),
-}));
+vi.mock("../../../api/projects", async () => {
+  const actual =
+    await vi.importActual<typeof import("../../../api/projects")>(
+      "../../../api/projects",
+    );
+  return {
+    ...actual,
+    listProjects: vi.fn(async () => ({
+      items: projects,
+      next_cursor: null,
+      total: 1,
+    })),
+    listComponents: vi.fn(async () => ({ items: [] })),
+    listMembers: vi.fn(async () => ({ items: [] })),
+    getProjectHierarchy: getProjectHierarchyMock,
+  };
+});
 
 vi.mock("../../../api/sprints", () => ({
   listSprints: vi.fn(async () => ({ items: sprints })),
@@ -73,7 +87,7 @@ vi.mock("../../../api/tickets", async () => {
   );
   return {
     ...actual,
-    listTickets: listTicketsMock,
+    listTickets: vi.fn(async () => ({ items: [] })),
     getTicket: vi.fn(),
     getSubtree: vi.fn(async () => ({ items: [] })),
   };
@@ -83,19 +97,37 @@ import KanbanPage from "../index";
 
 function renderPage() {
   return render(
-    <MemoryRouter initialEntries={["/board?project=DEF"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <MemoryRouter
+      initialEntries={["/board?project=DEF"]}
+      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+    >
       <KanbanPage />
     </MemoryRouter>,
   );
 }
 
+const baseTicket = {
+  project_id: "p-def",
+  type: "task",
+  priority: "medium",
+  version: 1,
+};
+
+function row(
+  overrides: Record<string, unknown>,
+  ordinal: number,
+): { depth: number; parent_id: null; ordinal: number; ticket: Record<string, unknown> } {
+  return {
+    depth: 0,
+    parent_id: null,
+    ordinal,
+    ticket: { ...baseTicket, ...overrides },
+  };
+}
+
 beforeEach(() => {
-  listTicketsMock.mockReset();
-  listTicketsMock.mockResolvedValue({
-    items: [],
-    next_cursor: null,
-    total: 0,
-  });
+  getProjectHierarchyMock.mockReset();
+  getProjectHierarchyMock.mockResolvedValue({ items: [] });
   try {
     window.localStorage.clear();
   } catch {
@@ -103,30 +135,79 @@ beforeEach(() => {
   }
 });
 
-describe("Kanban WP10 filter sentinels", () => {
-  it('sprint "No sprint" sends sprint_id=null, not __none__', async () => {
+describe("Kanban V5b filter sentinels (client-side)", () => {
+  it('sprint "No sprint" filters out tickets that carry a sprint_id', async () => {
+    getProjectHierarchyMock.mockResolvedValue({
+      items: [
+        row(
+          {
+            id: "t1",
+            display_id: "DEF-1",
+            title: "Has sprint",
+            status: "todo",
+            sprint_id: "sp-1",
+          },
+          1,
+        ),
+        row(
+          {
+            id: "t2",
+            display_id: "DEF-2",
+            title: "No sprint here",
+            status: "todo",
+            sprint_id: null,
+          },
+          2,
+        ),
+      ],
+    });
+
     const user = userEvent.setup();
     renderPage();
-    await waitFor(() => expect(listTicketsMock).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(screen.getByText("Has sprint")).toBeInTheDocument(),
+    );
 
     await user.selectOptions(screen.getByLabelText(/Filter by sprint/), "null");
 
     await waitFor(() => {
-      const calls = listTicketsMock.mock.calls;
-      const last = calls[calls.length - 1][0];
-      expect(last?.sprint_id).toBe("null");
+      expect(screen.queryByText("Has sprint")).not.toBeInTheDocument();
+      expect(screen.getByText("No sprint here")).toBeInTheDocument();
     });
-    // And never the legacy sentinel.
-    const allCalls = listTicketsMock.mock.calls.map((c) => c[0]?.sprint_id);
-    expect(allCalls).not.toContain("__none__");
   });
 
-  it('sprint "All sprints" omits sprint_id', async () => {
+  it('sprint "All sprints" restores all tickets', async () => {
+    getProjectHierarchyMock.mockResolvedValue({
+      items: [
+        row(
+          {
+            id: "t1",
+            display_id: "DEF-1",
+            title: "Has sprint",
+            status: "todo",
+            sprint_id: "sp-1",
+          },
+          1,
+        ),
+        row(
+          {
+            id: "t2",
+            display_id: "DEF-2",
+            title: "No sprint here",
+            status: "todo",
+            sprint_id: null,
+          },
+          2,
+        ),
+      ],
+    });
+
     const user = userEvent.setup();
     renderPage();
-    await waitFor(() => expect(listTicketsMock).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(screen.getByText("Has sprint")).toBeInTheDocument(),
+    );
 
-    // Select "no sprint" first then back to All.
     await user.selectOptions(screen.getByLabelText(/Filter by sprint/), "null");
     await user.selectOptions(
       screen.getByLabelText(/Filter by sprint/),
@@ -134,81 +215,45 @@ describe("Kanban WP10 filter sentinels", () => {
     );
 
     await waitFor(() => {
-      const last =
-        listTicketsMock.mock.calls[listTicketsMock.mock.calls.length - 1][0];
-      expect(last?.sprint_id).toBeUndefined();
+      expect(screen.getByText("Has sprint")).toBeInTheDocument();
+      expect(screen.getByText("No sprint here")).toBeInTheDocument();
     });
   });
 });
 
-describe("Kanban WP10 pagination", () => {
-  it('renders "Load more" when next_cursor present and appends on click', async () => {
-    // First page: 2 tickets, next_cursor populated.
-    listTicketsMock
-      .mockResolvedValueOnce({
-        items: [
+describe("Kanban V5b pagination retirement", () => {
+  it('does NOT render a "Load more" control (hierarchy endpoint returns the full subtree)', async () => {
+    getProjectHierarchyMock.mockResolvedValue({
+      items: [
+        row(
           {
             id: "t1",
             display_id: "DEF-1",
             title: "First",
             status: "todo",
-            type: "task",
-            priority: "medium",
-            version: 1,
-            project_id: "p-def",
           },
+          1,
+        ),
+        row(
           {
             id: "t2",
             display_id: "DEF-2",
             title: "Second",
             status: "todo",
-            type: "task",
-            priority: "medium",
-            version: 1,
-            project_id: "p-def",
           },
-        ],
-        next_cursor: "CURSOR-1",
-        total: 3,
-      })
-      .mockResolvedValueOnce({
-        items: [
-          {
-            id: "t3",
-            display_id: "DEF-3",
-            title: "Third",
-            status: "todo",
-            type: "task",
-            priority: "medium",
-            version: 1,
-            project_id: "p-def",
-          },
-        ],
-        next_cursor: null,
-        total: 3,
-      });
+          2,
+        ),
+      ],
+    });
 
-    const user = userEvent.setup();
     renderPage();
 
     await waitFor(() => {
       expect(screen.getByText("First")).toBeInTheDocument();
       expect(screen.getByText("Second")).toBeInTheDocument();
     });
-    const btn = await screen.findByRole("button", {
-      name: /Load more tickets/i,
-    });
-    expect(btn).toBeInTheDocument();
-
-    await user.click(btn);
-
-    await waitFor(() => {
-      expect(screen.getByText("Third")).toBeInTheDocument();
-    });
-    // The second call carried the cursor.
-    const cursorCall = listTicketsMock.mock.calls.find(
-      (c) => (c[0] as any)?.cursor === "CURSOR-1",
-    );
-    expect(cursorCall).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: /load more/i }),
+    ).not.toBeInTheDocument();
   });
 });

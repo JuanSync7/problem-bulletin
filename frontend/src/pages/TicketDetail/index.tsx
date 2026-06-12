@@ -26,6 +26,10 @@ import {
 } from "../../api/tickets";
 import { TicketFields } from "../../components/TicketFields";
 import { TicketActivityFeed } from "../../components/TicketActivityFeed";
+import { AgentRunBanner } from "./AgentRunBanner";
+import { LinkedIssuesSection } from "./LinkedIssuesSection";
+import { AttachmentsSection } from "./AttachmentsSection";
+import { CommentsSection } from "./CommentsSection";
 import { renderMarkdown } from "../../components/MarkdownEditor";
 import { PersonPicker } from "../../components/PersonPicker/index";
 import type { PersonRef } from "../../api/people";
@@ -74,6 +78,16 @@ export default function TicketDetail() {
   // activityKey forces TicketActivityFeed to re-mount (and re-fetch) after a
   // successful mutation — same pattern as the drawer.
   const [activityKey, setActivityKey] = useState(0);
+
+  // v2.29 (audit P2#13): identifiable browser tabs.
+  useEffect(() => {
+    if (ticket) {
+      document.title = `${ticket.display_id ?? displayId} — ${ticket.title}`;
+    }
+    return () => {
+      document.title = "Aion Bulletin";
+    };
+  }, [ticket, displayId]);
 
   useEffect(() => {
     if (!displayId) return;
@@ -278,6 +292,8 @@ export default function TicketDetail() {
         </div>
       </header>
 
+      <AgentRunBanner ticketId={ticket.id} />
+
       {mutateError && (
         <div
           className="ticket-detail__mutate-error"
@@ -305,6 +321,20 @@ export default function TicketDetail() {
               <p className="ticket-detail__empty-hint">No description provided.</p>
             </section>
           )}
+
+          <LinkedIssuesSection
+            ticketIdOrKey={ticket.display_id || ticket.id}
+          />
+
+          <AttachmentsSection
+            ticketIdOrKey={ticket.display_id || ticket.id}
+          />
+
+          <CommentsSection
+            ticketIdOrKey={ticket.display_id || ticket.id}
+            projectId={ticket.project_id ?? null}
+            onChanged={() => setActivityKey((k) => k + 1)}
+          />
 
           {/* Activity feed — added in v2.4-WP26 (was deferred from WP21) */}
           <section className="ticket-detail__activity" data-testid="ticket-detail-activity-section">

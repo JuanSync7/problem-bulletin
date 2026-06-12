@@ -45,3 +45,15 @@ from app.models.ticket_attachment import TicketAttachment  # noqa: F401
 # --- Ticketing v2.1 WP9 — @mention notification fanout ---
 from app.models.ticket_notification import TicketNotification  # noqa: F401
 from app.models.activity_audit_log import ActivityAuditLog  # noqa: F401
+
+# --- V4a: agent provider run journal ---
+from app.models.agent_run import AgentRun  # noqa: F401
+
+# --- V6a: project lessons (append-only) ---
+from app.models.project_lesson import ProjectLesson  # noqa: F401
+
+# --- V8a: Share space (v2.29-S3) ---
+from app.models.share_post import SharePost, SharePostVote  # noqa: F401
+
+# --- V8b: Bounty space (v2.29-S4) ---
+from app.models.bounty import Bounty  # noqa: F401

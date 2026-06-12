@@ -135,6 +135,8 @@ export interface CommentDTO {
   body: string;
   correlation_id?: string;
   created_at?: string;
+  // v7a: nested reply hierarchy (parity with problem comments).
+  parent_comment_id?: string | null;
 }
 
 export interface LinkDTO {
@@ -425,13 +427,19 @@ export async function addComment(
   idOrKey: string,
   body: string,
   mentions?: string[],
+  parentCommentId?: string | null,
 ): Promise<CommentDTO> {
   const payload: Record<string, unknown> = { body };
   if (mentions && mentions.length > 0) payload.mentions = mentions;
+  if (parentCommentId) payload.parent_comment_id = parentCommentId;
   return request(`${BASE}/${encodeURIComponent(idOrKey)}/comments`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function listComments(idOrKey: string): Promise<{ items: CommentDTO[] }> {
+  return request(`${BASE}/${encodeURIComponent(idOrKey)}/comments`);
 }
 
 // ---------------------------------------------------------------------------
@@ -570,6 +578,23 @@ export async function listTicketAttachments(
   return request(`${BASE}/${encodeURIComponent(idOrKey)}/attachments`);
 }
 
+export async function uploadTicketAttachment(
+  idOrKey: string,
+  file: File,
+): Promise<TicketAttachment> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch(
+    `${BASE}/${encodeURIComponent(idOrKey)}/attachments/upload`,
+    { method: "POST", body: fd, credentials: "include" },
+  );
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`Upload failed (${res.status}): ${txt}`);
+  }
+  return (await res.json()) as TicketAttachment;
+}
+
 export async function linkTickets(
   sourceIdOrKey: string,
   targetId: string,
@@ -580,4 +605,15 @@ export async function linkTickets(
     method: "POST",
     body: JSON.stringify({ target_id: targetId, link_type: linkType }),
   });
+}
+
+export interface TicketLinksGrouped {
+  outgoing: LinkDTO[];
+  incoming: LinkDTO[];
+}
+
+export async function listTicketLinks(
+  idOrKey: string,
+): Promise<TicketLinksGrouped> {
+  return request(`${BASE}/${encodeURIComponent(idOrKey)}/links`);
 }

@@ -5,18 +5,23 @@
   display: flex;
   flex-direction: column;
   gap: 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-border, #d0d7de);
 }
 
 .ticket-fields--drawer .ticket-fields__row {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid var(--color-border, #d0d7de);
+  padding: 0.4rem 0;
 }
 
-.ticket-fields--drawer .ticket-fields__row:last-child {
-  border-bottom: none;
+/* One separator per logical section — section rows get a top rule and extra
+ * breathing room; default rows do not draw any per-field separator. */
+.ticket-fields--drawer .ticket-fields__row--section {
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border, #d0d7de);
 }
 
 .ticket-fields--drawer .ticket-fields__label {

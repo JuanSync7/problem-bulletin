@@ -36,6 +36,13 @@ class TicketComment(Base):
         ForeignKey("tickets.id", ondelete="CASCADE"),
         nullable=False,
     )
+    # v7a: nullable self-referential FK so comments can nest (mirrors the
+    # ``comments.parent_comment_id`` shape used by problems).
+    parent_comment_id: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("ticket_comments.id", ondelete="CASCADE"),
+        nullable=True,
+    )
     author_id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), nullable=False)
     author_type: Mapped[str] = mapped_column(Text, nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)

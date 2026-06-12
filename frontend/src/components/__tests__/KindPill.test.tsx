@@ -33,14 +33,14 @@ describe("KindPill", () => {
     expect(span.getAttribute("style")).toContain("rgb(107, 114, 128)");
   });
 
-  it("uses the same slate foreground for user and agent kinds", () => {
+  it("uses the same bronze foreground for user and agent kinds", () => {
     const { container: userC } = render(<KindPill kind="user" />);
     const { container: agentC } = render(<KindPill kind="agent" />);
     const userStyle = userC.querySelector("span")!.getAttribute("style") ?? "";
     const agentStyle =
       agentC.querySelector("span")!.getAttribute("style") ?? "";
-    // Slate #475569 → rgb(71, 85, 105); must match the CSS --agent-fg token.
-    expect(userStyle).toContain("rgb(71, 85, 105)");
-    expect(agentStyle).toContain("rgb(71, 85, 105)");
+    // Bronze #7A5A18 → rgb(122, 90, 24); must match the CSS --agent-fg token.
+    expect(userStyle).toContain("rgb(122, 90, 24)");
+    expect(agentStyle).toContain("rgb(122, 90, 24)");
   });
 });

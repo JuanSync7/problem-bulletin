@@ -60,15 +60,20 @@ function Row({
   children,
   layout,
   testId,
+  variant,
 }: {
   label: string;
   children: React.ReactNode;
   layout: "drawer" | "page";
   testId?: string;
+  variant?: "default" | "section";
 }) {
   if (layout === "drawer") {
+    const cls = variant === "section"
+      ? "ticket-fields__row ticket-fields__row--section"
+      : "ticket-fields__row";
     return (
-      <div className="ticket-fields__row">
+      <div className={cls}>
         <span className="ticket-fields__label">{label}</span>
         <span className="ticket-fields__value" data-testid={testId}>
           {children}
@@ -186,7 +191,7 @@ export function TicketFields({ ticket, layout = "page" }: TicketFieldsProps) {
       </Row>
 
       {ticket.description && (
-        <Row label="Description" layout={layout} testId="tf-description">
+        <Row label="Description" layout={layout} testId="tf-description" variant="section">
           <div
             className="ticket-fields__description"
             dangerouslySetInnerHTML={{ __html: renderMarkdown(ticket.description) }}

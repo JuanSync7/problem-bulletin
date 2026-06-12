@@ -186,10 +186,13 @@ async def seeded_project(db, seeded_user) -> dict:
 
 @pytest.mark.asyncio
 async def test_empty_query_returns_empty_arms(db):
-    """query='' with entity='all' → 5 arms, each with items=[] and total=0."""
+    """query='' with entity='all' → 7 arms, each with items=[] and total=0."""
     result = await search_entities(db, query="", entity="all")
 
-    assert set(result.keys()) == {"problems", "tickets", "components", "labels", "users"}
+    assert set(result.keys()) == {
+        "problems", "tickets", "components", "labels", "users",
+        "share_posts", "bounties",
+    }
     for arm in result.values():
         assert arm["items"] == []
         assert arm["total"] == 0
@@ -455,8 +458,8 @@ async def test_filters_scope_arm(db, seeded_user, seeded_project):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_all_entity_returns_all_five_arms(db, seeded_user, seeded_project):
-    """entity='all' always returns exactly the 5 arm keys, even with hits."""
+async def test_all_entity_returns_all_seven_arms(db, seeded_user, seeded_project):
+    """entity='all' always returns exactly the 7 arm keys (v2.29-S6), even with hits."""
     unique = f"allarms{uuid.uuid4().hex[:6]}"
     await _seed_ticket(
         db,
@@ -469,7 +472,10 @@ async def test_all_entity_returns_all_five_arms(db, seeded_user, seeded_project)
     await db.flush()
 
     result = await search_entities(db, query=unique, entity="all")
-    assert set(result.keys()) == {"problems", "tickets", "components", "labels", "users"}
+    assert set(result.keys()) == {
+        "problems", "tickets", "components", "labels", "users",
+        "share_posts", "bounties",
+    }
     # tickets arm should have at least one hit
     assert result["tickets"]["total"] >= 1
 

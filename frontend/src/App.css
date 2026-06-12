@@ -3,41 +3,104 @@
    =========================== */
 
 :root {
-  --color-bg: #E4D9C5;
-  --color-surface: #EDE4D4;
-  --color-text: #1A1207;
-  --color-text-secondary: #5A4E3A;
-  --color-border: #C4B89E;
+  /* "Instrument" palette (v2.29) — warm paper, graphite ink, one
+     deep-viridian accent. Runtime values come from theme/colors.ts via
+     applyCssVariables(); these are the matching initial values. */
+  --color-bg: #F7F5F0;
+  --color-surface: #FFFFFF;
+  --color-surface-raised: #FFFFFF;
+  --color-surface-hover: #EFECE4;
+  --color-text: #1C1B17;
+  --color-text-secondary: #5C594F;
+  --color-text-muted: #8B8779;
+  --color-border: #E3E0D6;
 
-  --color-primary-start: #FFD700;
-  --color-primary-end: #32CD32;
-  --gradient-primary: linear-gradient(135deg, #FFD700, #32CD32);
+  --color-primary-start: #156B5E;
+  --color-primary-end: #1F8A77;
+  --gradient-primary: linear-gradient(135deg, #156B5E, #1F8A77);
 
-  --color-success: #22C55E;
-  --color-warning: #F59E0B;
-  --color-error: #EF4444;
-  --color-info: #3B82F6;
-  --color-star: #D4940A;  /* light mode: deeper amber for tan bg */
+  --color-success: #1F8A4C;
+  --color-warning: #B07A0C;
+  --color-error: #C2453A;
+  --color-info: #2D6FB0;
+  --color-star: #B07A0C;
+
+  /* Typography (v2.29): characterful display + refined body + mono for
+     display IDs / handles. Falls back to system stacks offline. */
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --font-body: "Instrument Sans", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-mono: "Spline Sans Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   /* WP63: shared agent-kind palette (was duplicated across PersonPicker,
-     Kanban avatar, TicketDetail inline pill, Search agent badge). */
-  --agent-bg: #e2e8f0;
-  --agent-fg: #475569;
-  --agent-border: #cbd5e1;
+     Kanban avatar, TicketDetail inline pill, Search agent badge).
+     v2.29: warm bronze, unified with the paper/ink theme. */
+  --agent-bg: #F3EAD9;
+  --agent-fg: #7A5A18;
+  --agent-border: #E2D3B4;
 
   --sidebar-width: 250px;
   --mobile-header-height: 56px;
   --transition-speed: 0.25s;
   --grid-line-color: rgba(0, 0, 0, 0.06);
+
+  /* Modern card system — borderless tinted plane + hover choreography */
+  --card-radius: 10px;
+  --card-tint: color-mix(in srgb, var(--color-surface) 55%, transparent);
+  --card-tint-hover: color-mix(in srgb, var(--color-surface) 95%, transparent);
+  --card-rail-width: 3px;
+  --card-shadow-hover:
+    0 10px 28px -12px rgba(26, 18, 7, 0.18),
+    0 2px 6px -2px rgba(26, 18, 7, 0.06);
+  --card-transition:
+    transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 0.22s ease,
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
 }
 
 [data-theme="dark"] {
-  --color-bg: #121212;
-  --color-surface: #1E1E1E;
-  --color-text: #E0E0E0;
-  --color-text-secondary: #9CA3AF;
-  --color-border: #374151;
+  --color-bg: #131312;
+  --color-surface: #1B1B19;
+  --color-surface-raised: #232320;
+  --color-surface-hover: #2A2A27;
+  --color-text: #E8E6DF;
+  --color-text-secondary: #A8A496;
+  --color-text-muted: #757164;
+  --color-border: #33322D;
   --grid-line-color: rgba(255, 255, 255, 0.03);
+
+  --color-star: #E5B458;
+  --agent-bg: #2E2920;
+  --agent-fg: #D9B873;
+  --agent-border: #4A4232;
+
+  --card-tint: color-mix(in srgb, var(--color-surface) 60%, transparent);
+  --card-tint-hover: var(--color-surface-raised);
+  --card-shadow-hover:
+    0 10px 28px -12px rgba(0, 0, 0, 0.55),
+    0 2px 6px -2px rgba(0, 0, 0, 0.3);
+}
+
+/* Shared entrance animation for list/grid cards.
+   Cards opt in by setting `animation-name: card-stagger-in` and
+   `animation-delay` via nth-child. */
+@keyframes card-stagger-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes card-stagger-in {
+    from { opacity: 1; transform: none; }
+    to   { opacity: 1; transform: none; }
+  }
 }
 
 /* ===========================
@@ -56,11 +119,11 @@ html {
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--color-bg, #E4D9C5);
+  background-color: var(--color-bg, #F7F5F0);
 }
 
 html, body {
-  background-color: var(--color-bg, #E4D9C5);
+  background-color: var(--color-bg, #F7F5F0);
 }
 
 #root {
@@ -68,12 +131,17 @@ html, body {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
-  background-color: var(--color-bg, #E4D9C5) !important;
+  font-family: var(--font-body);
+  background-color: var(--color-bg, #F7F5F0) !important;
   color: var(--color-text);
   line-height: 1.6;
   min-height: 100vh;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.015em;
+  line-height: 1.25;
 }
 
 a {
@@ -100,6 +168,31 @@ button {
 .layout {
   display: flex;
   min-height: 100vh;
+}
+
+.layout__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.layout__topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  padding: 1rem 1.5rem;
+  background-color: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.layout__topbar-inner {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  justify-content: center;
 }
 
 .layout__content {
@@ -296,8 +389,8 @@ button {
     display: flex;
   }
 
-  .layout__content {
-    padding-top: calc(var(--mobile-header-height) + 1rem);
+  .layout__main {
+    padding-top: var(--mobile-header-height);
   }
 }
 
@@ -318,7 +411,7 @@ button {
     display: none;
   }
 
-  .layout__content {
+  .layout__main {
     margin-left: var(--sidebar-width);
   }
 }

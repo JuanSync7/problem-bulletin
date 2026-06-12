@@ -1,4 +1,4 @@
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { AgentActivityFeed } from "../Kanban/AgentActivityFeed";
 import MentionsTab from "./MentionsTab";
 import MineTab from "./MineTab";
@@ -29,6 +29,10 @@ export default function ActivityPage() {
     <div className="activity-page">
       <header className="activity-page__header">
         <h1 className="activity-page__title">Activity</h1>
+        <p className="activity-page__subtitle">
+          Global activity across the workspace. For your personal inbox,
+          visit <Link to="/me">My Space</Link>.
+        </p>
       </header>
 
       <nav className="activity-tabs" aria-label="Activity tabs">

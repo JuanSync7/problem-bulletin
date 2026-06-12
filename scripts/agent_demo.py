@@ -1,7 +1,7 @@
 """MCP-driven end-to-end demo (G3 primary).
 
 Connects a Python MCP client to the running server's SSE transport at
-``http://localhost:8000/mcp/sse`` and walks an Epic + 3 Stories scenario,
+``http://localhost:28080/mcp/sse`` and walks an Epic + 3 Stories scenario,
 then claims, transitions, comments, links, lists and searches.
 
 Setup
@@ -29,7 +29,7 @@ Setup
        python scripts/agent_demo.py
 
 6. Open Jaeger at http://localhost:16686 to see the spans, and the
-   kanban board at http://localhost:5173/board (or :8000/board in
+   kanban board at http://localhost:28173/board (or :28080/board in
    single-server prod mode) to watch the tickets light up.
 
 Notes
@@ -58,7 +58,7 @@ except Exception as exc:  # pragma: no cover
     sys.exit(2)
 
 
-MCP_URL = os.getenv("PB_DEMO_MCP_URL", "http://localhost:8000/mcp/sse")
+MCP_URL = os.getenv("PB_DEMO_MCP_URL", "http://localhost:28080/mcp/sse")
 
 
 def _api_key() -> str:

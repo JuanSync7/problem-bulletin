@@ -37,7 +37,7 @@ os.environ.setdefault("JWT_SECRET", "test-jwt-secret-at-least-32-chars-long")  #
 os.environ.setdefault("SMTP_HOST", "localhost")  # load-bearing: no model default; required for notification config
 os.environ.setdefault("SMTP_PORT", "587")  # load-bearing: no model default; required for notification config
 os.environ.setdefault("SMTP_FROM", "test@aion-bulletin.local")  # load-bearing: no model default; required for notification config
-os.environ.setdefault("BASE_URL", "http://localhost:8000")  # load-bearing: no model default; used in magic-link URLs
+os.environ.setdefault("BASE_URL", "http://localhost:28080")  # load-bearing: no model default; used in magic-link URLs
 os.environ.setdefault("STORAGE_PATH", "/tmp/aion-test-storage")  # load-bearing: no model default; attachment storage root
 os.environ.setdefault("ENVIRONMENT", "development")  # load-bearing: matches model default; pinned to keep DEV_AUTH_BYPASS legal (WP05 fail-fast)
 os.environ.setdefault("DEV_AUTH_BYPASS", "false")  # load-bearing: matches model default; explicit to document intent for boot-hardening tests

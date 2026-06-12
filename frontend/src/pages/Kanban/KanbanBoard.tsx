@@ -9,6 +9,7 @@ import {
 import type { TicketDTO, TicketStatus } from "../../api/tickets";
 import { transitionTicket } from "../../api/tickets";
 import { KanbanColumn } from "./KanbanColumn";
+import type { AgentRunChipStatus } from "./TicketCard";
 import type { SwimlaneMode } from "./FiltersBar";
 
 const BASE_STATUSES: { status: TicketStatus; title: string }[] = [
@@ -50,6 +51,13 @@ interface KanbanBoardProps {
    * fall back to local lengths — limits are board-wide, not per-lane).
    */
   wipLimits?: Record<string, number>;
+  /**
+   * v2.29 S5 — ticket_id -> latest agent-run status for agent-assigned
+   * tickets, fetched once per board refresh (not per card).
+   */
+  agentRunLookup?: Record<string, AgentRunChipStatus>;
+  /** v2.29 S5 — invoked after a successful inline assign on any card. */
+  onAssigned?: () => void;
 }
 
 interface SwimlaneGroup {
@@ -113,6 +121,8 @@ export function KanbanBoard({
   sprintLookup = {},
   columnCounts = null,
   wipLimits = {},
+  agentRunLookup = {},
+  onAssigned,
 }: KanbanBoardProps) {
   const [pending, setPending] = useState<Set<string>>(new Set());
 
@@ -225,6 +235,8 @@ export function KanbanBoard({
                     ? limit
                     : undefined
                 }
+                agentRunLookup={agentRunLookup}
+                onAssigned={onAssigned}
               />
             );
           })}

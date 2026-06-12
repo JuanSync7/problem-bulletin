@@ -36,14 +36,68 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
+/** V2b — visually-distinct chip for human_review rows. */
+function HumanReviewBadge(): React.ReactElement {
+  return (
+    <span
+      className="mentions-row__badge mentions-row__badge--human-review"
+      data-testid="human-review-chip"
+      aria-label="Human review"
+    >
+      Human review
+    </span>
+  );
+}
+
+/** V4c — chip for ``agent_invoked_in_comment`` rows.  Renders the
+ * owner-facing label "Your agent was invoked in a comment".  The
+ * surrounding row's click target navigates to the ticket
+ * (``target_display_id``) so the owner can step into the thread; the
+ * originating comment id lives on ``comment_id`` for future deep-link
+ * upgrades.
+ */
+function AgentInvokedInCommentBadge(): React.ReactElement {
+  return (
+    <span
+      className="mentions-row__badge mentions-row__badge--agent-invoked"
+      data-testid="agent-invoked-chip"
+      aria-label="Your agent was invoked in a comment"
+    >
+      Your agent was invoked in a comment
+    </span>
+  );
+}
+
 /** Return the human-readable verb + target fragment for a notification row. */
 function renderKindLabel(n: TicketNotification): React.ReactNode {
   const displayId = n.target_display_id ?? "(ticket)";
   switch (n.kind) {
+    case "human_review":
+      return (
+        <>
+          <HumanReviewBadge />
+          <span className="mentions-row__verb"> requested your review on </span>
+          <span className="mentions-row__target">{displayId}</span>
+          {n.excerpt && (
+            <span className="mentions-row__excerpt">
+              {" "}
+              — <em>{n.excerpt}</em>
+            </span>
+          )}
+        </>
+      );
     case "ticket_mention":
       return (
         <>
           <span className="mentions-row__verb"> mentioned you in </span>
+          <span className="mentions-row__target">{displayId}</span>
+        </>
+      );
+    case "agent_invoked_in_comment":
+      return (
+        <>
+          <AgentInvokedInCommentBadge />
+          <span className="mentions-row__verb"> · </span>
           <span className="mentions-row__target">{displayId}</span>
         </>
       );

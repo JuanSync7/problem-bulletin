@@ -50,6 +50,7 @@ All queries are parametrised. No string interpolation of user input.
 """
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime
 from typing import Any
@@ -65,11 +66,37 @@ from app.services._pagination import (
 )
 
 # ---------------------------------------------------------------------------
+# A-FR-001: AION-N direct-match pattern
+# ---------------------------------------------------------------------------
+
+_AION_RE = re.compile(r"^AION-(\d+)$", re.IGNORECASE)
+
+# ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-_VALID_ENTITIES = frozenset({"all", "problems", "tickets", "components", "labels", "users"})
+# v2.29-S6: singular aliases accepted on the wire (frontend sends
+# entity=share_post / entity=bounty); normalised to the plural arm key
+# before dispatch so the response envelope always uses the arm name.
+_ENTITY_ALIASES = {"share_post": "share_posts", "bounty": "bounties"}
+
+_VALID_ENTITIES = frozenset(
+    {
+        "all",
+        "problems",
+        "tickets",
+        "components",
+        "labels",
+        "users",
+        "share_posts",
+        "bounties",
+        *_ENTITY_ALIASES,
+    }
+)
 _EXCERPT_LEN = 120
+
+# v2.29-S6: share_posts / bounties snippets truncate at ~160 chars.
+_SNIPPET_LEN = 160
 
 
 def _cursor_secret() -> str:
@@ -181,7 +208,7 @@ def _build_next_cursor(
         return None
     if arm == "problems":
         payload = {"rank": float(last_row["rank"]), "id": str(last_row["id"])}
-    elif arm == "tickets":
+    elif arm in ("tickets", "share_posts", "bounties"):
         payload = {
             "rank": float(last_row["rank"]),
             "created_at": last_row["created_at"].isoformat(),
@@ -240,6 +267,60 @@ def _authority_from_cursor(cursor: dict[str, Any] | None) -> str:
 
 
 # ---------------------------------------------------------------------------
+# A-FR-001: Direct-key resolution
+# ---------------------------------------------------------------------------
+
+
+async def resolve_direct_match(
+    db: AsyncSession,
+    query: str,
+) -> dict[str, Any] | None:
+    """Return a normalised SearchItem dict when *query* is a valid AION-N ticket ID.
+
+    Accepts leading/trailing whitespace (stripped before matching).
+    Rejects AION-0 (seq must be >= 1) and bare AION- (no number) — returns None.
+    Returns None when no ticket with that display_id exists.
+    """
+    stripped = query.strip()
+    m = _AION_RE.match(stripped)
+    if m is None:
+        return None
+
+    seq = int(m.group(1))
+    if seq < 1:
+        return None
+
+    display_id = stripped.upper()
+
+    row = (
+        await db.execute(
+            text(
+                "SELECT id, display_id, title, description, project_id, status "
+                "FROM tickets "
+                "WHERE lower(display_id) = lower(:display_id) "
+                "LIMIT 1"
+            ),
+            {"display_id": display_id},
+        )
+    ).mappings().one_or_none()
+
+    if row is None:
+        return None
+
+    return {
+        "id": str(row["id"]),
+        "display_id": row["display_id"],
+        "title": row["title"],
+        "subtitle": _trunc(row["description"]),
+        "kind": "ticket",
+        "href": f"/tickets/{row['display_id']}",
+        "rank": 1.0,
+        "project_id": str(row["project_id"]) if row["project_id"] else None,
+        "status": str(row["status"]) if row["status"] else None,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -260,6 +341,8 @@ async def search_entities(
     components_cursor: str | None = None,
     labels_cursor: str | None = None,
     users_cursor: str | None = None,
+    share_posts_cursor: str | None = None,
+    bounties_cursor: str | None = None,
     refresh_total: bool = False,
 ) -> dict[str, Any]:
     """Search across one or more entity types.
@@ -297,6 +380,9 @@ async def search_entities(
     if entity not in _VALID_ENTITIES:
         raise ValueError(f"Invalid entity: {entity!r}. Must be one of {sorted(_VALID_ENTITIES)}")
 
+    # v2.29-S6: normalise singular aliases (share_post → share_posts, …)
+    entity = _ENTITY_ALIASES.get(entity, entity)
+
     # Short-circuit on empty query
     if not query or not query.strip():
         if entity == "all":
@@ -306,12 +392,14 @@ async def search_entities(
                 "components": _empty_arm(),
                 "labels": _empty_arm(),
                 "users": _empty_arm(),
+                "share_posts": _empty_arm(),
+                "bounties": _empty_arm(),
             }
         return {entity: _empty_arm()}
 
     # Determine which arms to run
     arms = (
-        {"problems", "tickets", "components", "labels", "users"}
+        {"problems", "tickets", "components", "labels", "users", "share_posts", "bounties"}
         if entity == "all"
         else {entity}
     )
@@ -370,6 +458,26 @@ async def search_entities(
             limit=limit,
             offset=offset,
             cursor=_decode_arm_cursor("users", users_cursor),
+            refresh_total=refresh_total,
+        )
+
+    if "share_posts" in arms:
+        result["share_posts"] = await _search_share_posts(
+            db,
+            query,
+            limit=limit,
+            offset=offset,
+            cursor=_decode_arm_cursor("share_posts", share_posts_cursor),
+            refresh_total=refresh_total,
+        )
+
+    if "bounties" in arms:
+        result["bounties"] = await _search_bounties(
+            db,
+            query,
+            limit=limit,
+            offset=offset,
+            cursor=_decode_arm_cursor("bounties", bounties_cursor),
             refresh_total=refresh_total,
         )
 
@@ -968,6 +1076,222 @@ async def _search_users(
     next_cursor = (
         _build_next_cursor(
             "users", dict(rows[-1]), total=total, total_authority=authority
+        )
+        if len(rows) >= limit
+        else None
+    )
+    return {
+        "items": items,
+        "total": total,
+        "next_cursor": next_cursor,
+        "total_authority": authority,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Share posts arm — v2.29-S6
+# ---------------------------------------------------------------------------
+
+async def _search_share_posts(
+    db: AsyncSession,
+    query: str,
+    *,
+    limit: int,
+    offset: int,
+    cursor: dict[str, Any] | None = None,
+    refresh_total: bool = False,
+) -> dict[str, Any]:
+    """ILIKE on title/body; rank on title; newest-first secondary sort."""
+    rank_expr = _ilike_rank("sp.title", query)
+    params: dict[str, Any] = {
+        "lim": limit,
+        **_ilike_params(query),
+    }
+
+    if cursor is not None:
+        # Seek on (rank DESC, created_at DESC, id ASC) — same as tickets.
+        seek_clause = (
+            " AND (rank < :c_rank"
+            " OR (rank = :c_rank AND created_at < CAST(:c_created AS timestamptz))"
+            " OR (rank = :c_rank AND created_at = CAST(:c_created AS timestamptz)"
+            "     AND id > CAST(:c_id AS uuid)))"
+        )
+        params["c_rank"] = float(cursor["rank"])
+        params["c_created"] = datetime.fromisoformat(cursor["created_at"])
+        params["c_id"] = str(cursor["id"])
+        offset_clause = ""
+    else:
+        seek_clause = ""
+        params["off"] = offset
+        offset_clause = "OFFSET :off"
+
+    sql = text(f"""
+        WITH hits AS (
+            SELECT
+                sp.id           AS id,
+                sp.title        AS title,
+                sp.body         AS body,
+                sp.created_at   AS created_at,
+                {rank_expr}     AS rank
+            FROM share_posts sp
+            WHERE lower(sp.title) LIKE :q_ilike ESCAPE E'\\\\'
+               OR lower(sp.body)  LIKE :q_ilike ESCAPE E'\\\\'
+        ),
+        counted AS (
+            SELECT *, COUNT(*) OVER () AS total_count FROM hits
+        )
+        SELECT id, title, body, created_at, rank, total_count
+        FROM counted
+        WHERE 1=1{seek_clause}
+        ORDER BY rank DESC, created_at DESC, id ASC
+        LIMIT :lim {offset_clause}
+    """)
+
+    rows = (await db.execute(sql, params)).mappings().all()
+
+    snapshot = _total_from_cursor(cursor)
+    prior_authority = _authority_from_cursor(cursor)
+    if not rows:
+        return {
+            "items": [],
+            "total": snapshot or 0,
+            "next_cursor": None,
+            "total_authority": prior_authority,
+        }
+
+    live_total = int(rows[0]["total_count"])
+    if refresh_total or snapshot is None:
+        total = live_total
+        authority = "live" if refresh_total else "snapshot"
+    else:
+        total = snapshot
+        authority = prior_authority
+    items = [
+        {
+            "id": str(row["id"]),
+            "display_id": None,
+            "title": row["title"],
+            "subtitle": _trunc(row["body"], _SNIPPET_LEN),
+            "kind": "share_post",
+            "href": f"/share#{row['id']}",
+            "rank": float(row["rank"]),
+            "project_id": None,
+            "status": None,
+            "created_at": row["created_at"].isoformat(),
+        }
+        for row in rows
+    ]
+    next_cursor = (
+        _build_next_cursor(
+            "share_posts", dict(rows[-1]), total=total, total_authority=authority
+        )
+        if len(rows) >= limit
+        else None
+    )
+    return {
+        "items": items,
+        "total": total,
+        "next_cursor": next_cursor,
+        "total_authority": authority,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Bounties arm — v2.29-S6
+# ---------------------------------------------------------------------------
+
+async def _search_bounties(
+    db: AsyncSession,
+    query: str,
+    *,
+    limit: int,
+    offset: int,
+    cursor: dict[str, Any] | None = None,
+    refresh_total: bool = False,
+) -> dict[str, Any]:
+    """ILIKE on title/description; rank on title; newest-first secondary sort."""
+    rank_expr = _ilike_rank("b.title", query)
+    params: dict[str, Any] = {
+        "lim": limit,
+        **_ilike_params(query),
+    }
+
+    if cursor is not None:
+        seek_clause = (
+            " AND (rank < :c_rank"
+            " OR (rank = :c_rank AND created_at < CAST(:c_created AS timestamptz))"
+            " OR (rank = :c_rank AND created_at = CAST(:c_created AS timestamptz)"
+            "     AND id > CAST(:c_id AS uuid)))"
+        )
+        params["c_rank"] = float(cursor["rank"])
+        params["c_created"] = datetime.fromisoformat(cursor["created_at"])
+        params["c_id"] = str(cursor["id"])
+        offset_clause = ""
+    else:
+        seek_clause = ""
+        params["off"] = offset
+        offset_clause = "OFFSET :off"
+
+    sql = text(f"""
+        WITH hits AS (
+            SELECT
+                b.id            AS id,
+                b.title         AS title,
+                b.description   AS description,
+                b.status        AS status,
+                b.created_at    AS created_at,
+                {rank_expr}     AS rank
+            FROM bounties b
+            WHERE lower(b.title)       LIKE :q_ilike ESCAPE E'\\\\'
+               OR lower(b.description) LIKE :q_ilike ESCAPE E'\\\\'
+        ),
+        counted AS (
+            SELECT *, COUNT(*) OVER () AS total_count FROM hits
+        )
+        SELECT id, title, description, status, created_at, rank, total_count
+        FROM counted
+        WHERE 1=1{seek_clause}
+        ORDER BY rank DESC, created_at DESC, id ASC
+        LIMIT :lim {offset_clause}
+    """)
+
+    rows = (await db.execute(sql, params)).mappings().all()
+
+    snapshot = _total_from_cursor(cursor)
+    prior_authority = _authority_from_cursor(cursor)
+    if not rows:
+        return {
+            "items": [],
+            "total": snapshot or 0,
+            "next_cursor": None,
+            "total_authority": prior_authority,
+        }
+
+    live_total = int(rows[0]["total_count"])
+    if refresh_total or snapshot is None:
+        total = live_total
+        authority = "live" if refresh_total else "snapshot"
+    else:
+        total = snapshot
+        authority = prior_authority
+    items = [
+        {
+            "id": str(row["id"]),
+            "display_id": None,
+            "title": row["title"],
+            "subtitle": _trunc(row["description"], _SNIPPET_LEN),
+            "kind": "bounty",
+            "href": f"/bounties#{row['id']}",
+            "rank": float(row["rank"]),
+            "project_id": None,
+            "status": str(row["status"]) if row["status"] else None,
+            "created_at": row["created_at"].isoformat(),
+        }
+        for row in rows
+    ]
+    next_cursor = (
+        _build_next_cursor(
+            "bounties", dict(rows[-1]), total=total, total_authority=authority
         )
         if len(rows) >= limit
         else None

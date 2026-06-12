@@ -97,9 +97,10 @@ function AuditLogTable() {
       setError(null);
       try {
         const page = await listAuditLog(params);
-        setEntries((prev) => (replace ? page.items : [...prev, ...page.items]));
-        setNextCursor(page.next_cursor);
-        if (replace) setTotal(page.total);
+        const items = page.items ?? [];
+        setEntries((prev) => (replace ? items : [...prev, ...items]));
+        setNextCursor(page.next_cursor ?? null);
+        if (replace) setTotal(page.total ?? null);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load audit log");
       } finally {
@@ -206,7 +207,7 @@ function AuditLogTable() {
             </tr>
           </thead>
           <tbody>
-            {entries.map((entry) => {
+            {(entries ?? []).map((entry) => {
               const isExpanded = expandedIds.has(entry.id);
               const metaStr = JSON.stringify(entry.metadata, null, 2);
               const metaPreview = truncateJson(entry.metadata);
@@ -265,7 +266,7 @@ function AuditLogTable() {
                 </tr>
               );
             })}
-            {entries.length === 0 && !loading && (
+            {(entries ?? []).length === 0 && !loading && (
               <tr>
                 <td colSpan={5} className="settings__audit-empty">
                   No audit entries found.

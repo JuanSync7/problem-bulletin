@@ -26,7 +26,7 @@ def _make_settings(tenant_id=TENANT_ID):
     s.AZURE_TENANT_ID = tenant_id
     s.AZURE_CLIENT_ID = "test-client-id"
     s.AZURE_CLIENT_SECRET = "test-client-secret"
-    s.BASE_URL = "http://localhost:8000"
+    s.BASE_URL = "http://localhost:28080"
     return s
 
 

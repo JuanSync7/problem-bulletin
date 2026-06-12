@@ -262,6 +262,8 @@ export function useSearchV2(args: UseSearchV2Args): UseSearchV2Result {
       "components",
       "labels",
       "users",
+      "share_posts",
+      "bounties",
     ];
     const present = armKeys
       .map((k) => data[k])

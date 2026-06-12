@@ -203,14 +203,23 @@ async def test_e2e_entity_all_one_item_per_arm(db, seeded):
     assert resp.status_code == 200
     body = resp.json()
 
-    assert set(body.keys()) == {"problems", "tickets", "components", "labels", "users"}
+    # v2.29-S6 added the share_posts + bounties arms to entity=all. This
+    # fixture seeds one item per original arm; the two new arms are present
+    # but empty.
+    assert set(body.keys()) == {
+        "problems", "tickets", "components", "labels", "users",
+        "share_posts", "bounties",
+    }
 
-    # Each arm should have exactly 1 item
+    # Each seeded arm should have exactly 1 item
     assert body["problems"]["total"] == 1, f"problems total: {body['problems']['total']}"
     assert body["tickets"]["total"] == 1, f"tickets total: {body['tickets']['total']}"
     assert body["components"]["total"] == 1, f"components total: {body['components']['total']}"
     assert body["labels"]["total"] == 1, f"labels total: {body['labels']['total']}"
     assert body["users"]["total"] == 1, f"users total: {body['users']['total']}"
+    # The two new arms are unseeded here → empty.
+    assert body["share_posts"]["total"] == 0
+    assert body["bounties"]["total"] == 0
 
     # Items list lengths match
     for arm in ("problems", "tickets", "components", "labels", "users"):

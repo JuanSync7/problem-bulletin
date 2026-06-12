@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from sqlalchemy.exc import OperationalError
 
 
-_DEFAULT_URL = "postgresql+asyncpg://aion:changeme@localhost:5432/aion_bulletin"
+_DEFAULT_URL = "postgresql+asyncpg://aion:changeme@localhost:28432/aion_bulletin"
 TEST_DB_URL = os.getenv("PB_TEST_DATABASE_URL", _DEFAULT_URL)
 
 # All agent-kanban revisions plus the Step 1/3 renames, in chain order.

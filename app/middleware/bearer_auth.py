@@ -107,6 +107,21 @@ async def get_actor(
             actor = await _user_actor_from_jwt(cookie_token, db)
 
     if actor is None:
+        # Dev bypass: mirror app.auth.dependencies.get_current_user so routes
+        # that depend on get_actor (e.g. GET /api/v1/projects) work uniformly
+        # in local dev with DEV_AUTH_BYPASS=true.
+        from app.auth.dependencies import _get_or_create_dev_user
+        from app.config import get_settings
+        if get_settings().DEV_AUTH_BYPASS:
+            user = await _get_or_create_dev_user(db)
+            actor = Actor(
+                id=user.id,
+                type=ActorType.user,
+                label=user.email or str(user.id),
+                scopes=(),
+            )
+
+    if actor is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
