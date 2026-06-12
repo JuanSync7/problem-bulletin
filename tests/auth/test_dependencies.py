@@ -34,18 +34,26 @@ def _make_token_payload(user_id=None, role="user"):
 
 
 def _make_request(cookie_token=None, bearer_token=None):
-    """Build a mock Request with cookies and/or Authorization header."""
-    request = MagicMock()
+    """Build a mock Request with cookies and/or Authorization header.
+
+    v2.11-WP11 (C5): delegates to ``tests.helpers.requests.build_mock_request``
+    so ``.headers`` is a real ``starlette.datastructures.Headers`` instance
+    (case-insensitive), matching production behaviour. The handler reads
+    ``request.headers.get("authorization", "")`` lowercase; we deliberately
+    seed the canonical capital-A ``Authorization`` here so the test exercises
+    the case-insensitive lookup path end-to-end.
+    """
+    from tests.helpers.requests import build_mock_request
+
     cookies = {}
     if cookie_token:
         cookies["access_token"] = cookie_token
-    request.cookies = cookies
 
     headers = {}
     if bearer_token:
         headers["Authorization"] = f"Bearer {bearer_token}"
-    request.headers = headers
-    return request
+
+    return build_mock_request(headers=headers, cookies=cookies)
 
 
 # ---------------------------------------------------------------------------
@@ -278,22 +286,22 @@ class TestRequireOwnerOrAdmin:
     async def test_owner_passes(self, make_user):
         user = make_user(role=UserRole.user)
         resource_owner_id = str(user.id)
-        # Should not raise
-        await require_owner_or_admin(user, resource_owner_id)
+        # Should not raise. Production signature is (resource_owner_id, user).
+        await require_owner_or_admin(resource_owner_id, user)
 
     @pytest.mark.asyncio
     async def test_admin_passes_even_if_not_owner(self, make_user):
         admin_user = make_user(role=UserRole.admin)
         other_owner_id = str(uuid.uuid4())  # different UUID
         # Should not raise
-        await require_owner_or_admin(admin_user, other_owner_id)
+        await require_owner_or_admin(other_owner_id, admin_user)
 
     @pytest.mark.asyncio
     async def test_non_owner_non_admin_raises_403(self, make_user):
         user = make_user(role=UserRole.user)
         other_owner_id = str(uuid.uuid4())  # different UUID
         with pytest.raises(HTTPException) as exc_info:
-            await require_owner_or_admin(user, other_owner_id)
+            await require_owner_or_admin(other_owner_id, user)
         assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
@@ -301,7 +309,7 @@ class TestRequireOwnerOrAdmin:
         user = make_user(role=UserRole.user)
         other_owner_id = str(uuid.uuid4())
         with pytest.raises(HTTPException) as exc_info:
-            await require_owner_or_admin(user, other_owner_id)
+            await require_owner_or_admin(other_owner_id, user)
         detail = exc_info.value.detail.lower()
         assert "permission" in detail or "forbidden" in detail or "403" in str(exc_info.value.status_code)
 

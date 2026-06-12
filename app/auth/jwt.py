@@ -13,6 +13,9 @@ from app.schemas import TokenPayload
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 8
 
+# WP34 — short-lived realtime token TTL (seconds).
+REALTIME_TOKEN_TTL_SECONDS = 300
+
 
 def create_access_token(user) -> str:
     """Create a signed JWT for the given user.
@@ -60,3 +63,48 @@ def set_auth_cookie(response: Response, token: str) -> None:
 def clear_auth_cookie(response: Response) -> None:
     """Remove the ``access_token`` cookie."""
     response.delete_cookie(key="access_token", path="/")
+
+
+# ---------------------------------------------------------------------------
+# WP34 — Realtime short-lived token helpers
+# ---------------------------------------------------------------------------
+
+def create_realtime_token(user) -> tuple[str, datetime]:
+    """Create a short-lived realtime-purpose JWT for the given user.
+
+    Returns ``(token_str, expires_at)`` where ``expires_at`` is a UTC-aware
+    datetime.  The ``purpose`` claim is set to ``"realtime"`` so the WS
+    endpoint can distinguish this token from a main session JWT.
+    """
+    settings = get_settings()
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(seconds=REALTIME_TOKEN_TTL_SECONDS)
+    payload = {
+        "sub": str(user.id),
+        "purpose": "realtime",
+        "exp": expires_at,
+        "iat": now,
+    }
+    token = jwt.encode(
+        payload, settings.JWT_SECRET.get_secret_value(), algorithm=ALGORITHM
+    )
+    return token, expires_at
+
+
+def decode_realtime_token(token: str) -> str:
+    """Decode a realtime JWT and return the ``sub`` (user id string).
+
+    Raises:
+        jose.JWTError: On any validation failure (expiry, signature, missing
+            purpose claim, or ``purpose != "realtime"``).
+    """
+    settings = get_settings()
+    data = jwt.decode(
+        token, settings.JWT_SECRET.get_secret_value(), algorithms=[ALGORITHM]
+    )
+    if data.get("purpose") != "realtime":
+        raise JWTError("token purpose is not 'realtime'")
+    sub = data.get("sub")
+    if not sub:
+        raise JWTError("missing sub claim")
+    return str(sub)

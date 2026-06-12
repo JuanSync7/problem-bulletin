@@ -48,6 +48,19 @@ class ProblemUpdateRequest(BaseModel):
     category_id: str | None = None
 
 
+# v2.11-WP07 — response_model for POST /problems/{id}/claim.
+# The route returns either {"detail", "claimed"} (claim removed) or
+# {"detail", "claimed", "claim_id"} (claim added). The frontend
+# (`pages/ProblemDetail.tsx`) only checks `res.ok`, so the exact keys
+# are loose — we declare an extra='allow' permissive schema.
+class ClaimToggleResponse(BaseModel):
+    model_config = {"extra": "allow"}
+
+    detail: str
+    claimed: bool
+    claim_id: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -190,7 +203,7 @@ async def transition_status_route(
     return ProblemDetailResponse(**detail)
 
 
-@router.post("/{problem_id}/claim")
+@router.post("/{problem_id}/claim", response_model=ClaimToggleResponse)
 async def claim_problem_route(
     problem_id: str,
     user: CurrentUser,

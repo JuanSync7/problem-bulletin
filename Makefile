@@ -1,4 +1,4 @@
-.PHONY: help setup up down restart logs backend frontend db-migrate db-reset test clean
+.PHONY: help setup up down restart logs backend frontend db-migrate db-reset test clean kill-ports demo demo-dry
 
 COMPOSE := docker compose -f docker-compose.dev.yml
 VENV    := .venv/bin
@@ -14,11 +14,10 @@ help: ## Show this help
 setup: ## First-time setup: venv, deps, DB, migrations, frontend deps
 	@echo "==> Creating Python venv..."
 	python3 -m venv .venv
-	@echo "==> Installing backend dependencies..."
-	$(VENV)/pip install -q fastapi">=0.111" "uvicorn[standard]" "sqlalchemy[asyncio]>=2.0" \
-		asyncpg alembic "pydantic>=2.7" pydantic-settings authlib "python-jose[cryptography]" \
-		aiosmtplib httpx python-multipart pillow itsdangerous \
-		pytest pytest-asyncio ruff mypy
+	@echo "==> Upgrading pip..."
+	$(VENV)/pip install -q --upgrade pip
+	@echo "==> Installing backend dependencies (from pyproject.toml)..."
+	$(VENV)/pip install -q -e ".[dev]"
 	@echo "==> Installing frontend dependencies..."
 	cd frontend && npm install
 	@echo "==> Starting PostgreSQL..."
@@ -30,48 +29,85 @@ setup: ## First-time setup: venv, deps, DB, migrations, frontend deps
 	@echo ""
 	@echo "Setup complete. Run 'make up' to start the app."
 
-up: ## Start everything: PostgreSQL + backend + frontend
+up: kill-ports ## Start everything detached: PostgreSQL + backend + frontend (logs in .pids/)
 	@mkdir -p $(PID_DIR)
 	@echo "==> Starting PostgreSQL..."
 	$(COMPOSE) up -d --wait
 	@echo "==> Running migrations..."
 	$(VENV)/alembic upgrade head
-	@echo "==> Starting backend (port 8000)..."
-	$(VENV)/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 & echo $$! > $(PID_DIR)/backend.pid
+	@echo "==> Starting backend (port 28080) → $(PID_DIR)/backend.log ..."
+	@nohup setsid $(VENV)/uvicorn app.main:app --reload \
+		--reload-dir app --reload-exclude '.pids/*' --reload-exclude '.venv/*' \
+		--reload-exclude 'frontend/*' --reload-exclude '.delivery/*' \
+		--host 0.0.0.0 --port 28080 \
+		</dev/null >$(PID_DIR)/backend.log 2>&1 & echo $$! > $(PID_DIR)/backend.pid
 	@sleep 1
-	@echo "==> Starting frontend (port 5173)..."
-	cd frontend && npm run dev & echo $$! > $(PID_DIR)/frontend.pid
+	@echo "==> Starting frontend (port 28173) → $(PID_DIR)/frontend.log ..."
+	@nohup setsid sh -c 'cd frontend && npm run dev' \
+		</dev/null >$(PID_DIR)/frontend.log 2>&1 & echo $$! > $(PID_DIR)/frontend.pid
 	@sleep 2
 	@echo ""
 	@echo "============================================"
-	@echo "  Frontend:  http://localhost:5173"
-	@echo "  Backend:   http://localhost:8000"
-	@echo "  API docs:  http://localhost:8000/docs"
-	@echo "  Health:    http://localhost:8000/healthz"
+	@echo "  Frontend:  http://localhost:28173"
+	@echo "  Backend:   http://localhost:28080"
+	@echo "  API docs:  http://localhost:28080/docs"
+	@echo "  Health:    http://localhost:28080/healthz"
 	@echo "============================================"
-	@echo "  Run 'make down' to stop everything."
+	@echo "  Logs:      tail -f $(PID_DIR)/backend.log  $(PID_DIR)/frontend.log"
+	@echo "  Stop:      make down"
 	@echo ""
 
-down: ## Stop everything: backend + frontend + PostgreSQL
-	@echo "==> Stopping backend..."
-	@-test -f $(PID_DIR)/backend.pid && kill $$(cat $(PID_DIR)/backend.pid) 2>/dev/null; rm -f $(PID_DIR)/backend.pid
-	@echo "==> Stopping frontend..."
-	@-test -f $(PID_DIR)/frontend.pid && kill $$(cat $(PID_DIR)/frontend.pid) 2>/dev/null; rm -f $(PID_DIR)/frontend.pid
+down: ## Stop everything: backend + frontend + demo + PostgreSQL
+	@echo "==> Stopping backend (process group)..."
+	@-test -f $(PID_DIR)/backend.pid && kill -TERM -$$(cat $(PID_DIR)/backend.pid) 2>/dev/null; rm -f $(PID_DIR)/backend.pid
+	@echo "==> Stopping frontend (process group)..."
+	@-test -f $(PID_DIR)/frontend.pid && kill -TERM -$$(cat $(PID_DIR)/frontend.pid) 2>/dev/null; rm -f $(PID_DIR)/frontend.pid
+	@echo "==> Stopping demo (if running)..."
+	@-test -f $(PID_DIR)/demo.pid && kill -TERM -$$(cat $(PID_DIR)/demo.pid) 2>/dev/null; rm -f $(PID_DIR)/demo.pid
 	@# Also kill any lingering uvicorn/vite processes
 	@-pkill -f "uvicorn app.main:app" 2>/dev/null || true
 	@-pkill -f "vite" 2>/dev/null || true
+	@-pkill -f "app.scripts.orchestrate_demo" 2>/dev/null || true
+	@$(MAKE) -s kill-ports
 	@echo "==> Stopping PostgreSQL..."
 	$(COMPOSE) down
 	@echo "All stopped."
 
+kill-ports: ## Free dev ports: 28080 backend, 28173 frontend, 28432 pg
+	@echo "==> Freeing ports 28080, 28173, 28432..."
+	@-fuser -k -TERM 28080/tcp 28173/tcp 28432/tcp 2>/dev/null || true
+	@sleep 1
+	@-fuser -k -KILL 28080/tcp 28173/tcp 28432/tcp 2>/dev/null || true
+
 restart: down up ## Restart everything
+
+demo: ## Populate the dev app with the Problem-Bulletin demo (detached; logs in .pids/demo.log)
+	@mkdir -p $(PID_DIR)
+	@echo "==> Running orchestrate_demo detached → $(PID_DIR)/demo.log ..."
+	@nohup setsid $(VENV)/python -m app.scripts.orchestrate_demo \
+		</dev/null >$(PID_DIR)/demo.log 2>&1 & echo $$! > $(PID_DIR)/demo.pid
+	@echo "  PID: $$(cat $(PID_DIR)/demo.pid)"
+	@echo "  Tail:  tail -f $(PID_DIR)/demo.log"
+	@echo "  Stop:  make down  (or: kill -TERM -$$(cat $(PID_DIR)/demo.pid))"
+
+demo-dry: ## Show what the demo would do without committing (foreground)
+	$(VENV)/python -m app.scripts.orchestrate_demo --dry-run
+
+logs-backend: ## Tail backend log
+	tail -f $(PID_DIR)/backend.log
+
+logs-frontend: ## Tail frontend log
+	tail -f $(PID_DIR)/frontend.log
+
+logs-demo: ## Tail demo log
+	tail -f $(PID_DIR)/demo.log
 
 # ---------------------------------------------------------------------------
 # Individual services
 # ---------------------------------------------------------------------------
 
 backend: ## Start backend only (assumes PostgreSQL is running)
-	$(VENV)/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+	$(VENV)/uvicorn app.main:app --reload --host 0.0.0.0 --port 28080
 
 frontend: ## Start frontend only (assumes backend is running)
 	cd frontend && npm run dev

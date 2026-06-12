@@ -242,33 +242,46 @@ class TestCommentCreate:
 # ---------------------------------------------------------------------------
 
 class TestCommentResponse:
+    @staticmethod
+    def _make_comment(body: str, replies=None):
+        """Build a CommentResponse with the v2 required-field set.
+
+        WP07 note: ``CommentResponse`` grew four required fields since this
+        test was written (``author: UserResponse | None``, ``is_anonymous``,
+        ``is_edited``, ``created_at``) and switched ``id: UUID`` → ``id: str``.
+        Centralise the construction so each test can stay focused on the
+        self-reference invariant it actually asserts.
+        """
+        from datetime import datetime, timezone
+        return CommentResponse(
+            id=str(uuid.uuid4()),
+            author=None,
+            body=body,
+            is_anonymous=False,
+            is_edited=False,
+            created_at=datetime.now(timezone.utc),
+            replies=replies or [],
+        )
+
     def test_model_rebuild_resolves_self_reference(self):
         """REQ: model_rebuild() is called at module import time; CommentResponse is usable."""
         # If model_rebuild() was not called, constructing nested CommentResponse would fail.
         # The fact that we can import and instantiate it at all proves module-level rebuild ran.
-        inner = CommentResponse(
-            id=uuid.uuid4(),
-            body="inner reply",
-            replies=[],
-        )
-        outer = CommentResponse(
-            id=uuid.uuid4(),
-            body="outer comment",
-            replies=[inner],
-        )
+        inner = self._make_comment("inner reply")
+        outer = self._make_comment("outer comment", replies=[inner])
         assert len(outer.replies) == 1
         assert outer.replies[0].body == "inner reply"
 
     def test_deeply_nested_replies_accepted(self):
         """REQ: Self-referential replies field accepts multiple levels of nesting."""
-        level3 = CommentResponse(id=uuid.uuid4(), body="deep", replies=[])
-        level2 = CommentResponse(id=uuid.uuid4(), body="mid", replies=[level3])
-        level1 = CommentResponse(id=uuid.uuid4(), body="top", replies=[level2])
+        level3 = self._make_comment("deep")
+        level2 = self._make_comment("mid", replies=[level3])
+        level1 = self._make_comment("top", replies=[level2])
         assert level1.replies[0].replies[0].body == "deep"
 
     def test_empty_replies_list_accepted(self):
         """REQ: replies=[] is the leaf-node case — accepted without error."""
-        model = CommentResponse(id=uuid.uuid4(), body="leaf comment", replies=[])
+        model = self._make_comment("leaf comment")
         assert model.replies == []
 
 

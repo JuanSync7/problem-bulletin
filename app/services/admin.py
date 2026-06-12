@@ -8,12 +8,18 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.enums import UserRole
+from app.exceptions import ValidationError
 from app.logging import log_event
 from app.models.app_config import ALLOWED_CONFIG_KEYS, AppConfig
 from app.models.audit_log import AuditLog
 from app.models.flag import Flag
 from app.models.problem import Problem
 from app.models.user import User
+
+# Canonical role allow-list, sourced from ``app.enums.UserRole`` so the
+# service layer cannot drift from the schema/route Literal.  v2.11-WP03.
+_ALLOWED_ROLES: frozenset[str] = frozenset(r.value for r in UserRole)
 
 
 # ---------------------------------------------------------------------------
@@ -32,21 +38,54 @@ async def search_users(db: AsyncSession, query: str | None) -> list[User]:
     return list(result.scalars().all())
 
 
-async def update_user_role(db: AsyncSession, user_id: UUID, new_role: str) -> User:
-    """Update a user's role."""
+async def update_user_role(
+    db: AsyncSession,
+    user_id: UUID,
+    new_role: str,
+    *,
+    actor_id: UUID | None = None,
+) -> User:
+    """Update a user's role.
+
+    v2.11-WP03: ``new_role`` is validated against ``app.enums.UserRole`` at
+    the service boundary so non-route callers (background jobs, agent
+    actions, other services) cannot write garbage values.  Raises the
+    domain ``ValidationError`` on unknown roles.
+
+    ``actor_id`` is the caller's principal id (audit-actor convention).
+    When omitted we fall back to the target user id for backward
+    compatibility with legacy call sites; routes MUST thread the admin's
+    own id.
+    """
+    if new_role not in _ALLOWED_ROLES:
+        raise ValidationError([
+            {"name": "role", "reason": f"must be one of {sorted(_ALLOWED_ROLES)}"}
+        ])
     user = await _get_user_or_404(db, user_id)
     user.role = new_role
     await db.flush()
-    log_event("user.role_changed", "user", str(user_id), str(user_id), "update_role", {"new_role": new_role})
+    actor = str(actor_id) if actor_id is not None else str(user_id)
+    log_event("user.role_changed", "user", str(user_id), actor, "update_role", {"new_role": new_role})
     return user
 
 
-async def update_user_status(db: AsyncSession, user_id: UUID, is_active: bool) -> User:
-    """Toggle a user's active status."""
+async def update_user_status(
+    db: AsyncSession,
+    user_id: UUID,
+    is_active: bool,
+    *,
+    actor_id: UUID | None = None,
+) -> User:
+    """Toggle a user's active status.
+
+    v2.11-WP03: accepts ``actor_id`` (caller principal) for audit-log
+    consistency; falls back to target ``user_id`` when omitted.
+    """
     user = await _get_user_or_404(db, user_id)
     user.is_active = is_active
     await db.flush()
-    log_event("user.status_changed", "user", str(user_id), str(user_id), "update_status", {"is_active": is_active})
+    actor = str(actor_id) if actor_id is not None else str(user_id)
+    log_event("user.status_changed", "user", str(user_id), actor, "update_status", {"is_active": is_active})
     return user
 
 
@@ -118,8 +157,22 @@ async def get_config(db: AsyncSession) -> list[AppConfig]:
     return list(result.scalars().all())
 
 
-async def update_config(db: AsyncSession, key: str, value: str) -> AppConfig:
-    """Upsert a config value; key must be in the allowlist."""
+async def update_config(
+    db: AsyncSession,
+    key: str,
+    value: str,
+    *,
+    actor_id: UUID | None = None,
+) -> AppConfig:
+    """Upsert a config value; key must be in the allowlist.
+
+    v2.11-WP03: accepts ``actor_id`` (caller principal) so the audit log
+    records *who* performed the change.  Previously the audit slot held
+    the literal string ``"admin"``, which broke the audit-actor
+    convention applied elsewhere in this service.  When ``actor_id`` is
+    not supplied we fall back to ``"system"`` (clearly non-user) rather
+    than the misleading ``"admin"`` sentinel.
+    """
     if key not in ALLOWED_CONFIG_KEYS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -137,7 +190,8 @@ async def update_config(db: AsyncSession, key: str, value: str) -> AppConfig:
         config.value = value
 
     await db.flush()
-    log_event("config.updated", "app_config", key, "admin", "update_config", {"value": value})
+    actor = str(actor_id) if actor_id is not None else "system"
+    log_event("config.updated", "app_config", key, actor, "update_config", {"value": value})
     return config
 
 

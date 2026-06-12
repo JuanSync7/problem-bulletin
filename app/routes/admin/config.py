@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.dependencies import AdminUser
 from app.database import get_db
 from app.services.admin import get_config, update_config
 
@@ -45,8 +46,9 @@ async def list_config(
 @router.patch("/", response_model=ConfigItemOut)
 async def patch_config(
     body: ConfigUpdateRequest,
+    admin: AdminUser,
     db: AsyncSession = Depends(get_db),
 ):
     """Upsert a runtime configuration value (key must be in the allowlist)."""
-    item = await update_config(db, body.key, body.value)
+    item = await update_config(db, body.key, body.value, actor_id=admin.id)
     return item

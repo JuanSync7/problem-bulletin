@@ -89,6 +89,7 @@ def _apply_sort(
     sort: SortMode,
 ) -> tuple[Select, Any]:
     """Add ORDER BY to *stmt* and return (stmt, sort_column) for keyset pagination."""
+    sort_col: Any
     if sort == SortMode.new:
         sort_col = Problem.created_at
         stmt = stmt.order_by(Problem.created_at.desc(), Problem.id.desc())

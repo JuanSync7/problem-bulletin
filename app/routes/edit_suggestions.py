@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -32,13 +32,21 @@ class EditSuggestionResponse(BaseModel):
     status: str
     created_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+# v2.11-WP07 — response_model for accept/reject action endpoints.
+class EditSuggestionActionResponse(BaseModel):
+    """``{"status": "accepted"|"rejected", "id": "<uuid>"}``."""
+
+    status: str
+    id: str
 
 
 @router.post(
     "/problems/{problem_id}/edit-suggestions",
     status_code=status.HTTP_201_CREATED,
+    response_model=EditSuggestionResponse,
 )
 async def create_edit_suggestion(
     problem_id: str,
@@ -79,7 +87,10 @@ async def create_edit_suggestion(
     }
 
 
-@router.get("/problems/{problem_id}/edit-suggestions")
+@router.get(
+    "/problems/{problem_id}/edit-suggestions",
+    response_model=list[EditSuggestionResponse],
+)
 async def list_edit_suggestions(
     problem_id: str,
     db: AsyncSession = Depends(get_db),
@@ -111,7 +122,10 @@ async def list_edit_suggestions(
     ]
 
 
-@router.post("/edit-suggestions/{suggestion_id}/accept")
+@router.post(
+    "/edit-suggestions/{suggestion_id}/accept",
+    response_model=EditSuggestionActionResponse,
+)
 async def accept_edit_suggestion(
     suggestion_id: str,
     user: CurrentUser,
@@ -145,7 +159,10 @@ async def accept_edit_suggestion(
     return {"status": "accepted", "id": str(suggestion.id)}
 
 
-@router.post("/edit-suggestions/{suggestion_id}/reject")
+@router.post(
+    "/edit-suggestions/{suggestion_id}/reject",
+    response_model=EditSuggestionActionResponse,
+)
 async def reject_edit_suggestion(
     suggestion_id: str,
     user: CurrentUser,

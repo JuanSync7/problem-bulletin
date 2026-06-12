@@ -2,6 +2,11 @@
 Shared test fixtures for the Aion Bulletin test suite.
 Derived from: docs/AION_BULLETIN_TEST_DOCS.md — Mock/Stub Interface Specifications
 """
+# v2.10-WP07: ``tests/_v1_deferred.py`` deleted (manifest empty after
+# WP02–WP07 ported every v1-rotted test to live DB). The
+# ``pytest_collection_modifyitems`` skip-hook below was removed at the
+# same time. See ``.claude/lessons-learned/v2.10-wp07-diagnosis.md``.
+
 import os
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -18,19 +23,25 @@ from sqlalchemy.ext.asyncio import (
 # ---------------------------------------------------------------------------
 # Environment overrides — must happen before any app import
 # ---------------------------------------------------------------------------
-os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_aion")
-os.environ.setdefault("AZURE_TENANT_ID", "test-tenant-id")
-os.environ.setdefault("AZURE_CLIENT_ID", "test-client-id")
-os.environ.setdefault("AZURE_CLIENT_SECRET", "test-client-secret")
-os.environ.setdefault("JWT_SECRET", "test-jwt-secret-at-least-32-chars-long")
-os.environ.setdefault("SMTP_HOST", "localhost")
-os.environ.setdefault("SMTP_PORT", "587")
-os.environ.setdefault("SMTP_FROM", "test@aion-bulletin.local")
-os.environ.setdefault("BASE_URL", "http://localhost:8000")
-os.environ.setdefault("STORAGE_PATH", "/tmp/aion-test-storage")
-os.environ.setdefault("ENVIRONMENT", "development")
-os.environ.setdefault("DEV_AUTH_BYPASS", "false")
-os.environ.setdefault("APP_NAME", "Aion Bulletin Test")
+# v2.11-WP09 (C6) — each setdefault below is annotated load-bearing
+# with a short reason. The lint at
+# ``tests/test_conftest_env_audit_wp09.py`` enforces that every
+# ``os.environ.setdefault(...)`` in conftest files carries this
+# annotation. See ``.claude/lessons-learned/v2.11-wp09-diagnosis.md``
+# for the full classification table.
+os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_aion")  # load-bearing: no model default; required by Settings to construct engine
+os.environ.setdefault("AZURE_TENANT_ID", "test-tenant-id")  # load-bearing: no model default; required by Settings
+os.environ.setdefault("AZURE_CLIENT_ID", "test-client-id")  # load-bearing: no model default; required by Settings
+os.environ.setdefault("AZURE_CLIENT_SECRET", "test-client-secret")  # load-bearing: no model default; required by Settings
+os.environ.setdefault("JWT_SECRET", "test-jwt-secret-at-least-32-chars-long")  # load-bearing: no model default; min-length enforced
+os.environ.setdefault("SMTP_HOST", "localhost")  # load-bearing: no model default; required for notification config
+os.environ.setdefault("SMTP_PORT", "587")  # load-bearing: no model default; required for notification config
+os.environ.setdefault("SMTP_FROM", "test@aion-bulletin.local")  # load-bearing: no model default; required for notification config
+os.environ.setdefault("BASE_URL", "http://localhost:28080")  # load-bearing: no model default; used in magic-link URLs
+os.environ.setdefault("STORAGE_PATH", "/tmp/aion-test-storage")  # load-bearing: no model default; attachment storage root
+os.environ.setdefault("ENVIRONMENT", "development")  # load-bearing: matches model default; pinned to keep DEV_AUTH_BYPASS legal (WP05 fail-fast)
+os.environ.setdefault("DEV_AUTH_BYPASS", "false")  # load-bearing: matches model default; explicit to document intent for boot-hardening tests
+os.environ.setdefault("APP_NAME", "Aion Bulletin Test")  # load-bearing: distinct from model default to surface ambient-env leakage in tests
 
 
 # ---------------------------------------------------------------------------
@@ -157,3 +168,58 @@ def expired_time():
 def valid_time():
     """A datetime 5 minutes in the future (within magic link 15-min window)."""
     return datetime.now(timezone.utc) + timedelta(minutes=5)
+
+
+# v2.10-WP07: the WP01-era ``pytest_collection_modifyitems`` skip-hook was
+# removed here once the deferral manifest emptied. All 313 originally
+# deferred IDs were ported, replaced, or — in WP07 — re-pinned against
+# the current contract. See ``.claude/lessons-learned/v2.10-wp07-diagnosis.md``
+# for the closing summary.
+
+
+# ---------------------------------------------------------------------------
+# v2.14-WP03 (B4) — parity-lint session-scoped fixtures
+# ---------------------------------------------------------------------------
+# The OpenAPI↔TS parity-lint cluster (tests/test_openapi_ts_parity_*.py)
+# used module-scoped ``build_test_app()`` + ``app.openapi()`` fixtures,
+# paying the boot cost once per file. Profiling under WP03 showed two
+# parity-lint modules each paying ~1.3s + ~0.4s setup respectively,
+# pushing cluster wall time to ~2.01s. Lifting to session scope folds
+# the second app-build into the cache, eliminating the duplicate work.
+#
+# These fixtures are scoped narrowly to the parity-lint cluster — no
+# other test file consumes them. See
+# ``.claude/lessons-learned/v2.14-wp03-diagnosis.md`` for the timing
+# delta and the canonical recipe.
+@pytest.fixture(scope="session")
+def parity_lint_app():
+    """Session-scoped FastAPI app for parity-lint tests (WP03 perf)."""
+    from tests.helpers.app_factory import build_test_app
+    return build_test_app()
+
+
+@pytest.fixture(scope="session")
+def parity_lint_openapi_spec(parity_lint_app):
+    """Session-scoped OpenAPI schema dict for parity-lint tests."""
+    return parity_lint_app.openapi()
+
+
+@pytest.fixture(scope="session")
+def parity_lint_ts_sources():
+    """Session-scoped cache of frontend TS source files used by parity-lint.
+
+    Returns a dict mapping ``<file_name>`` → file contents. Files are
+    read once per session; the parity-lint tests pull from this dict
+    rather than re-reading from disk.
+    """
+    from pathlib import Path
+    repo_root = Path(__file__).resolve().parent.parent
+    api_dir = repo_root / "frontend" / "src" / "api"
+    files = ("tickets.ts", "projects.ts", "sprints.ts", "notifications.ts",
+             "search.ts", "people.ts", "users.ts", "comments.ts")
+    out: dict[str, str] = {}
+    for name in files:
+        p = api_dir / name
+        if p.exists():
+            out[name] = p.read_text(encoding="utf-8")
+    return out

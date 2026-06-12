@@ -1,0 +1,153 @@
+/* TicketFields — shared field grid for drawer (vertical) and page (2-col sidebar) */
+
+/* === Vertical layout (drawer) ================================ */
+.ticket-fields--drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-border, #d0d7de);
+}
+
+.ticket-fields--drawer .ticket-fields__row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.4rem 0;
+}
+
+/* One separator per logical section — section rows get a top rule and extra
+ * breathing room; default rows do not draw any per-field separator. */
+.ticket-fields--drawer .ticket-fields__row--section {
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border, #d0d7de);
+}
+
+.ticket-fields--drawer .ticket-fields__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary, #57606a);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.ticket-fields--drawer .ticket-fields__value {
+  font-size: 0.875rem;
+  color: var(--color-text, #24292f);
+}
+
+/* === Page layout (2-column grid sidebar) ===================== */
+.ticket-fields--page {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+.ticket-fields--page .ticket-fields__label {
+  font-weight: 600;
+  color: var(--color-text-secondary, #57606a);
+  white-space: nowrap;
+}
+
+.ticket-fields--page .ticket-fields__value {
+  margin: 0;
+  word-break: break-word;
+}
+
+/* === Shared value variants =================================== */
+.ticket-fields__unset {
+  color: var(--color-text-tertiary, #8c959f);
+  font-style: italic;
+}
+
+/* Status badge (inline inside field) */
+.ticket-fields__status {
+  display: inline-block;
+  padding: 0.15em 0.6em;
+  border-radius: 2em;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--color-bg-muted, #f6f8fa);
+  border: 1px solid var(--color-border, #d0d7de);
+}
+
+.ticket-fields__status--in_progress { background: #ddf4ff; color: #0550ae; border-color: #54aeff; }
+.ticket-fields__status--done        { background: #dafbe1; color: #116329; border-color: #56d364; }
+.ticket-fields__status--blocked     { background: #fff1e5; color: #bc4c00; border-color: #fb8f44; }
+.ticket-fields__status--cancelled   { background: #f6f8fa; color: #57606a; border-color: #d0d7de; }
+.ticket-fields__status--in_review   { background: #fbefff; color: #6e40c9; border-color: #d2a8ff; }
+.ticket-fields__status--todo        { background: #f6f8fa; color: #24292f; border-color: #d0d7de; }
+.ticket-fields__status--backlog     { background: #f6f8fa; color: #57606a; border-color: #d0d7de; }
+
+/* Priority badge */
+.ticket-fields__priority {
+  display: inline-block;
+  padding: 0.15em 0.55em;
+  border-radius: 2em;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid var(--color-border, #d0d7de);
+}
+
+.ticket-fields__priority--urgent { background: #ffebe9; color: #82071e; border-color: #ff818266; }
+.ticket-fields__priority--high   { background: #fff1e5; color: #bc4c00; border-color: #fb8f4466; }
+.ticket-fields__priority--medium { background: #fffbdd; color: #6e4700; border-color: #e3b34166; }
+.ticket-fields__priority--low    { background: #f6f8fa; color: #57606a; border-color: #d0d7de; }
+
+/* Markdown description (reused in both layouts) */
+.ticket-fields__description {
+  line-height: 1.6;
+}
+
+.ticket-fields__description h1,
+.ticket-fields__description h2,
+.ticket-fields__description h3 {
+  margin: 0.8em 0 0.4em;
+}
+
+.ticket-fields__description p {
+  margin: 0 0 0.6em;
+}
+
+.ticket-fields__description pre {
+  background: var(--color-bg-muted, #f6f8fa);
+  border: 1px solid var(--color-border, #d0d7de);
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+}
+
+.ticket-fields__description code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+  background: var(--color-bg-muted, #f6f8fa);
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+}
+
+.ticket-fields__description pre code {
+  background: none;
+  padding: 0;
+}
+
+/* Labels list */
+.ticket-fields__labels {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.ticket-fields__label-chip {
+  background: var(--color-bg-muted, #f6f8fa);
+  border: 1px solid var(--color-border, #d0d7de);
+  border-radius: 2em;
+  padding: 0.1em 0.5em;
+  font-size: 0.8rem;
+}

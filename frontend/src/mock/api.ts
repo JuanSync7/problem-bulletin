@@ -98,7 +98,9 @@ function matchRoute(url: string, method: string): RouteMatch | null {
     [/^\/api\/admin\/categories$/, "categories"],
     [/^\/api\/domains$/, "domains"],
     [/^\/api\/leaderboard$/, "leaderboard"],
-    [/^\/api\/search$/, "search"],
+    // v2.11-WP13: /api/search v1 mock removed — deprecated in favour of
+    // /api/search/v2. Confirm no caller exercises this mock route before
+    // dropping the corresponding fixture key.
     [/^\/api\/tags$/, "tags"],
     [/^\/api\/notifications$/, "empty_array"],
     [/^\/api\/health$/, "health"],

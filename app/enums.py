@@ -43,3 +43,70 @@ class ParentType(str, Enum):             # REQ-258
     problem  = "problem"
     solution = "solution"
     comment  = "comment"
+
+
+# --- Ticket / Kanban work-tracker enums (Step 3) ----------------------------
+# These describe the post-Step-3 ``tickets`` table (formerly ``work_items``).
+# TicketStatus and TicketType are unchanged from the prior agent-kanban set;
+# TicketPriority and TicketLinkType take the work-item shapes (the legacy
+# values from a1_agent_kanban are gone with the legacy Ticket overlay).
+
+class TicketType(str, Enum):
+    workpackage = "workpackage"  # v2: top of in-project tree
+    epic        = "epic"
+    story       = "story"
+    task        = "task"
+    subtask     = "subtask"
+    bug         = "bug"
+
+
+class TicketStatus(str, Enum):
+    backlog     = "backlog"  # v2: default for new epics / workpackages
+    todo        = "todo"
+    in_progress = "in_progress"
+    in_review   = "in_review"
+    blocked     = "blocked"
+    done        = "done"
+    cancelled   = "cancelled"
+
+
+class TicketPriority(str, Enum):
+    low    = "low"
+    medium = "medium"
+    high   = "high"
+    urgent = "urgent"
+
+
+class TicketLinkType(str, Enum):
+    blocks           = "blocks"
+    is_blocked_by    = "is_blocked_by"
+    duplicates       = "duplicates"
+    is_duplicate_of  = "is_duplicate_of"
+    relates_to       = "relates_to"
+    # v2: parent_of / child_of are tombstoned. Hierarchy lives on
+    # ``tickets.parent_id``. Kept in the enum for historical rows; the
+    # service layer must refuse to write them in v2.
+    parent_of        = "parent_of"
+    child_of         = "child_of"
+    clones           = "clones"           # v2: ticket B was cloned from ticket A
+    is_cloned_by     = "is_cloned_by"
+
+
+class ActorType(str, Enum):
+    user  = "user"
+    agent = "agent"
+
+
+class ProjectRole(str, Enum):
+    lead   = "lead"
+    member = "member"
+    viewer = "viewer"
+
+
+class SprintState(str, Enum):
+    planned = "planned"
+    active  = "active"
+    closed  = "closed"
+
+
+TERMINAL_STATUSES = frozenset({TicketStatus.done, TicketStatus.cancelled})

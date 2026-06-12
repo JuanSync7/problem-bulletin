@@ -1,0 +1,203 @@
+/**
+ * PersonPicker component styles — v2.5-WP32.
+ *
+ * Uses design tokens from App.css where available (--color-border, --color-bg,
+ * --color-text-muted, etc.). Falls back to inline values where tokens are
+ * absent.
+ */
+
+.pp {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+/* Input */
+.pp__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border, #cbd5e1);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  background: var(--color-bg, #fff);
+  color: var(--color-text, #0f172a);
+  outline: none;
+}
+
+.pp__input:focus {
+  border-color: var(--color-accent, #0ea5e9);
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.15);
+}
+
+.pp__input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Selected chip */
+.pp__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--color-border, #cbd5e1);
+  border-radius: 4px;
+  background: var(--color-bg-subtle, #f8fafc);
+  font-size: 0.9rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pp__chip-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pp__chip-handle {
+  color: var(--color-text-muted, #64748b);
+  font-size: 0.82em;
+}
+
+.pp__chip-clear {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 1em;
+  line-height: 1;
+  color: var(--color-text-muted, #64748b);
+  padding: 0 2px;
+  flex-shrink: 0;
+}
+
+.pp__chip-clear:hover {
+  color: var(--color-text, #0f172a);
+}
+
+.pp__chip-clear:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Kind badge */
+.pp__badge {
+  display: inline-block;
+  font-size: 0.7em;
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.pp__badge--user {
+  background: #0ea5e9;
+  color: #fff;
+}
+
+.pp__badge--agent {
+  background: #7c3aed;
+  color: #fff;
+}
+
+/* WP47: agent type badge inside selected chip — subtle slate pill, distinct
+   from the colored single-letter KindBadge. Mirrors the muted neutral tone
+   used by .mentions-row__badge--cancelled in Activity.css. */
+.person-picker-chip__type-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--agent-bg);
+  color: var(--agent-fg);
+  flex-shrink: 0;
+}
+
+/* Dropdown */
+.pp__listbox {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: var(--color-bg, #fff);
+  border: 1px solid var(--color-border, #cbd5e1);
+  border-radius: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+}
+
+.pp__option {
+  padding: 6px 8px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+}
+
+.pp__option:hover,
+.pp__option--active {
+  background: var(--color-bg-subtle, #f1f5f9);
+}
+
+.pp__option[aria-selected="true"] {
+  background: var(--color-accent-light, #e0f2fe);
+}
+
+.pp__option-main {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pp__option-name {
+  font-weight: 600;
+}
+
+.pp__option-sub {
+  font-size: 0.8em;
+  color: var(--color-text-muted, #64748b);
+  margin-top: 1px;
+}
+
+.pp__hint {
+  padding: 6px 8px;
+  color: var(--color-text-muted, #64748b);
+  font-style: italic;
+}
+
+/* Inline loading dots */
+.pp__loading-dots {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.pp__loading-dots span {
+  width: 4px;
+  height: 4px;
+  background: var(--color-text-muted, #64748b);
+  border-radius: 50%;
+  animation: pp-pulse 1s infinite ease-in-out;
+}
+
+.pp__loading-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.pp__loading-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes pp-pulse {
+  0%, 80%, 100% { opacity: 0.3; }
+  40% { opacity: 1; }
+}

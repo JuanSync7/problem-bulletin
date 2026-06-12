@@ -1,6 +1,8 @@
 import React, { useState, useCallback } from "react";
 import { Sidebar } from "./Sidebar";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useAuth } from "../hooks/useAuth";
+import { GlobalSearchBar } from "../components/GlobalSearchBar";
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -9,6 +11,8 @@ interface MainLayoutProps {
 export function MainLayout({ children }: MainLayoutProps) {
   const isDesktop = useMediaQuery("(min-width: 1024px)");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
   const openSidebar = useCallback(() => setSidebarOpen(true), []);
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
@@ -31,9 +35,16 @@ export function MainLayout({ children }: MainLayoutProps) {
         </header>
       )}
 
-      <Sidebar isOpen={isDesktop || sidebarOpen} onClose={closeSidebar} />
+      <Sidebar isOpen={isDesktop || sidebarOpen} onClose={closeSidebar} isAdmin={isAdmin} />
 
-      <main className="layout__content">{children}</main>
+      <div className="layout__main">
+        <header className="layout__topbar">
+          <div className="layout__topbar-inner">
+            <GlobalSearchBar />
+          </div>
+        </header>
+        <main className="layout__content">{children}</main>
+      </div>
     </div>
   );
 }

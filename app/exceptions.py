@@ -46,3 +46,105 @@ class MagicLinkExpiredError(AppError):  # REQ-106 → 410
 
 class TenantMismatchError(AppError):  # REQ-102 → 403
     pass
+
+
+# --- Agent-Kanban domain exceptions (Task A7) -------------------------------
+
+class StaleVersionError(AppError):
+    """OCC conflict: the row's version no longer matches expected."""
+
+    def __init__(self, current_version: int, current):
+        self.current_version = current_version
+        self.current = current
+        super().__init__(f"Stale version; current_version={current_version}")
+
+
+class ChildrenOpenError(AppError):
+    """Epic-close blocked by non-terminal children."""
+
+    def __init__(self, blocking_child_ids: list):
+        self.blocking_child_ids = list(blocking_child_ids)
+        super().__init__(
+            f"Cannot close: {len(self.blocking_child_ids)} child ticket(s) still open"
+        )
+
+
+class AlreadyClaimedError(AppError):
+    def __init__(self, current_assignee_id):
+        self.current_assignee_id = current_assignee_id
+        super().__init__(f"Ticket already claimed by {current_assignee_id!s}")
+
+
+class LinkExistsError(AppError):
+    """A (source, target, type) link already exists."""
+
+
+class CycleDetectedError(AppError):
+    """The proposed link would introduce a parent/blocks cycle."""
+
+
+class DepthLimitError(AppError):
+    """Hierarchy depth would exceed the configured cap."""
+
+
+class ChildLimitError(AppError):
+    """Parent already has the maximum allowed direct children."""
+
+
+class InvalidTransitionError(AppError):
+    def __init__(self, from_: str, to: str):
+        self.from_ = from_
+        self.to = to
+        super().__init__(f"Invalid transition {from_!r} -> {to!r}")
+
+
+class NotFoundError(AppError):
+    """Generic 404 for domain entities."""
+
+
+class ForbiddenError(AppError):
+    """Generic 403."""
+
+
+class ValidationError(AppError):
+    """Field-level validation failure for domain layer (not Pydantic)."""
+
+    def __init__(self, fields: list[dict]):
+        self.fields = list(fields)
+        super().__init__(f"Validation failed on {len(self.fields)} field(s)")
+
+
+class AuthError(AppError):
+    """401 / authentication failure."""
+
+
+class RateLimitedError(AppError):
+    def __init__(self, retry_after_ms: int):
+        self.retry_after_ms = int(retry_after_ms)
+        super().__init__(f"Rate limited; retry after {retry_after_ms}ms")
+
+
+# Aliases / additions used by the service layer (S1-S8) -----------------------
+
+class TicketNotFoundError(NotFoundError):
+    def __init__(self, ident):
+        self.ident = ident
+        super().__init__(f"Ticket not found: {ident!s}")
+
+
+# OptimisticConcurrencyError is the canonical name used by the service layer.
+# StaleVersionError remains for back-compat with earlier docs.
+OptimisticConcurrencyError = StaleVersionError
+
+
+# DuplicateLinkError is the canonical name used by the service layer.
+DuplicateLinkError = LinkExistsError
+
+
+class ScopeDeniedError(ForbiddenError):
+    """Agent token authenticated but lacks the required scope."""
+
+    def __init__(self, required: str):
+        self.required = required
+        super().__init__(f"Scope denied: {required!r}")
+

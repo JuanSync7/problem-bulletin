@@ -1,14 +1,70 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { parseApiError } from "../api/errors";
 import "./Leaderboard.css";
 
-type Track = "solvers" | "reporters";
+export type Track = "solvers" | "reporters";
 type Period = "this_week" | "this_month" | "all_time";
 
-interface LeaderboardEntry {
+export interface LeaderboardEntry {
   rank: number;
   userId: string;
   displayName: string;
   score: number;
+}
+
+// ---------------------------------------------------------------------------
+// v2.18-WP03 L3: Discriminated raw-payload union for /api/leaderboard.
+//
+// The backend (`app/services/leaderboard.py`) emits two row shapes; the
+// natural discriminator is the *request* track, not a per-row tag, so the
+// union is narrowed against `Track` at normalisation time rather than via
+// runtime sniffing. Both variants share user_id / display_name / rank and
+// carry one track-specific score column (accepted_count vs upstar_count).
+// camelCase aliases remain accepted for legacy in-flight payloads.
+// ---------------------------------------------------------------------------
+interface LeaderboardEntryBase {
+  user_id?: string;
+  userId?: string;
+  display_name?: string;
+  displayName?: string;
+  rank?: number;
+}
+
+export interface LeaderboardSolverRaw extends LeaderboardEntryBase {
+  accepted_count?: number;
+}
+
+export interface LeaderboardReporterRaw extends LeaderboardEntryBase {
+  upstar_count?: number;
+}
+
+export type LeaderboardRawEntry = LeaderboardSolverRaw | LeaderboardReporterRaw;
+
+export function normalizeLeaderboardEntry(
+  raw: LeaderboardRawEntry,
+  track: Track,
+  index: number,
+): LeaderboardEntry {
+  const userId = raw.userId ?? raw.user_id ?? "";
+  const displayName = raw.displayName ?? raw.display_name ?? "Unknown";
+  const rank = raw.rank ?? index + 1;
+
+  let score: number;
+  switch (track) {
+    case "solvers":
+      score = (raw as LeaderboardSolverRaw).accepted_count ?? 0;
+      break;
+    case "reporters":
+      score = (raw as LeaderboardReporterRaw).upstar_count ?? 0;
+      break;
+    default: {
+      // Exhaustiveness — if a new Track is added, TS errors here.
+      const _exhaustive: never = track;
+      return _exhaustive;
+    }
+  }
+
+  return { rank, userId, displayName, score };
 }
 
 const TRACK_LABELS: Record<Track, string> = {
@@ -51,17 +107,21 @@ export default function Leaderboard() {
         { signal: controller.signal, credentials: "include" }
       );
       if (!res.ok) {
-        throw new Error(`Failed to load leaderboard (${res.status})`);
+        // v2.14-WP04: route error message through parseApiError so the
+        // backend's structured envelope (code/message/correlation_id) is
+        // preserved when surfaced to the user.
+        const body = await res.json().catch(() => null);
+        const parsed = parseApiError(res, body);
+        throw new Error(parsed.message);
       }
       const data = await res.json();
       if (!controller.signal.aborted) {
-        const raw: any[] = Array.isArray(data.entries) ? data.entries : Array.isArray(data) ? data : [];
-        setEntries(raw.map((e: any, i: number) => ({
-          rank: e.rank ?? i + 1,
-          userId: e.userId ?? e.user_id ?? "",
-          displayName: e.displayName ?? e.display_name ?? "Unknown",
-          score: e.score ?? e.accepted_count ?? e.upstar_count ?? e.problem_count ?? 0,
-        })));
+        const raw: LeaderboardRawEntry[] = Array.isArray(data.entries)
+          ? (data.entries as LeaderboardRawEntry[])
+          : Array.isArray(data)
+            ? (data as LeaderboardRawEntry[])
+            : [];
+        setEntries(raw.map((e, i) => normalizeLeaderboardEntry(e, t, i)));
         setIsLoading(false);
       }
     } catch (err) {

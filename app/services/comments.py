@@ -237,7 +237,8 @@ async def get_comments(
     # Build lookup and tree
     nodes: dict[uuid.UUID, dict] = {}
     for c in comments:
-        nodes[c.id] = _comment_to_dict(c, authors_by_id.get(c.author_id), requester)
+        author = authors_by_id.get(c.author_id) if c.author_id is not None else None
+        nodes[c.id] = _comment_to_dict(c, author, requester)
 
     # Attach children to parents
     roots: list[dict] = []

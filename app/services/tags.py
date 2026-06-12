@@ -6,7 +6,10 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.exceptions import ValidationError
 from app.models.problem import ProblemTag, Tag
+
+_ALLOWED_TAG_SORTS = ("name", "usage")
 
 
 class TagNotFoundError(Exception):
@@ -31,7 +34,16 @@ async def get_tags(db: AsyncSession, sort: str = "name", q: str | None = None) -
     """Return all tags with usage_count.  REQ-460.
 
     *sort* can be ``"name"`` (alphabetical) or ``"usage"`` (descending count).
+    Any other value raises :class:`app.exceptions.ValidationError` (strict
+    contract — v2.11-WP04 A7).  The public route already returns 422 for
+    invalid sorts; this guard pins the same behaviour for direct service
+    callers (e.g. MCP, scripts).
     """
+    if sort not in _ALLOWED_TAG_SORTS:
+        raise ValidationError(
+            [{"name": "sort", "reason": f"must be one of {_ALLOWED_TAG_SORTS!r}"}]
+        )
+
     usage_count = (
         func.count(ProblemTag.problem_id).label("usage_count")
     )

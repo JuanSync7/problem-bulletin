@@ -6,28 +6,40 @@ version: "3.8"
 # Usage:
 #   docker compose -f docker-compose.dev.yml up -d
 #   Then in separate terminals:
-#     cd /home/juansync7/problem-bulletin && .venv/bin/uvicorn app.main:app --reload --port 8000
+#     cd /home/juansync7/problem-bulletin && .venv/bin/uvicorn app.main:app --reload --port 28080
 #     cd /home/juansync7/problem-bulletin/frontend && npm run dev
 #
-#   Frontend: http://localhost:5173  (Vite proxies /api → localhost:8000)
-#   Backend:  http://localhost:8000
+#   Frontend: http://localhost:28173  (Vite proxies /api → localhost:28080)
+#   Backend:  http://localhost:28080
 
 services:
   postgres:
     image: postgres:16
+    command: -p 28432
     ports:
-      - "5432:5432"
+      - "28432:28432"
     environment:
       POSTGRES_DB: aion_bulletin
       POSTGRES_USER: aion
       POSTGRES_PASSWORD: changeme
+      PGPORT: "28432"
     volumes:
       - pgdata_dev:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U aion"]
+      test: ["CMD-SHELL", "pg_isready -U aion -p 28432"]
       interval: 5s
       timeout: 3s
       retries: 5
+
+  jaeger:
+    # Task C4: local OTel collector + UI. App connects via OTEL_EXPORTER_OTLP_ENDPOINT.
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "4317:4317"    # OTLP gRPC (app -> collector)
+      - "4318:4318"    # OTLP HTTP
+      - "16686:16686"  # Jaeger UI
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
 
 volumes:
   pgdata_dev:

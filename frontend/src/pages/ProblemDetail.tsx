@@ -1,11 +1,26 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import React, { useState, useEffect, useCallback, lazy, Suspense } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { StatusBadge } from "../components/StatusBadge";
 import { useAuth } from "../hooks/useAuth";
 import { useAnonymousMode } from "../hooks/useAnonymousMode";
 import { renderMarkdown } from "../components/MarkdownEditor";
+const RichEditor = lazy(() => import("../components/RichEditor"));
 import type { ProblemStatus } from "../components/StatusBadge";
+import { parseApiError } from "../api/errors";
 import "./ProblemDetail.css";
+
+/**
+ * v2.15-WP03 (C1) — file-local helper that converts a non-2xx Response
+ * into a thrown Error carrying the unified envelope's `message`. Used by
+ * every action/hydration fetch in this page so non-2xx surfaces via
+ * `setActionError` instead of being silently swallowed by `if (res.ok)`
+ * branches with no else.
+ */
+async function throwParsed(res: Response, fallback: string): Promise<never> {
+  const body = await res.json().catch(() => null);
+  const parsed = parseApiError(res, body);
+  throw new Error(parsed.message || fallback);
+}
 
 /* ===========================
    Types
@@ -34,6 +49,40 @@ interface Comment {
   is_edited: boolean;
   created_at: string;
   replies?: Comment[];
+}
+
+/**
+ * v2.18-WP02 — local OpenAPI-mirror of `EditSuggestionResponse`
+ * (`app/routes/edit_suggestions.py`). Pinned via consumer usage only;
+ * if the backend response shape evolves, the parity work-package will
+ * surface the drift via the OpenAPI parity lint when these types are
+ * promoted to `frontend/src/api/`.
+ */
+interface EditSuggestionRead {
+  id: string;
+  problem_id: string;
+  author: Author | null;
+  suggested_description: string;
+  reason: string | null;
+  status: string;
+  created_at: string;
+}
+
+/**
+ * v2.18-WP02 — local OpenAPI-mirror of `AttachmentResponse`
+ * (`app/routes/attachments.py`).
+ */
+interface AttachmentRead {
+  id: string;
+  parent_type: string;
+  parent_id: string;
+  uploader_id: string;
+  filename: string;
+  content_type: string;
+  byte_size: number;
+  storage_path: string;
+  render_inline: boolean;
+  created_at: string;
 }
 
 type WatchLevel = "all_activity" | "solutions_only" | "status_only" | "none";
@@ -102,11 +151,11 @@ const ALL_STATUSES: { value: ProblemStatus; label: string }[] = [
 ];
 
 const SOLUTION_STATUSES = [
-  { value: "pending", label: "Pending", color: "#9CA3AF" },
-  { value: "under_review", label: "Under Review", color: "#F59E0B" },
-  { value: "verified", label: "Verified", color: "#3B82F6" },
-  { value: "accepted", label: "Accepted", color: "#22C55E" },
-  { value: "rejected", label: "Rejected", color: "#EF4444" },
+  { value: "pending", label: "Pending", color: "#8B8779" },
+  { value: "under_review", label: "Under Review", color: "#B07A0C" },
+  { value: "verified", label: "Verified", color: "#2D6FB0" },
+  { value: "accepted", label: "Accepted", color: "#1F8A4C" },
+  { value: "rejected", label: "Rejected", color: "#C2453A" },
 ];
 
 /* ===========================
@@ -261,6 +310,7 @@ function CommentItem({
   onReplySubmitted,
   onEditSubmitted,
   onDelete,
+  onActionError,
 }: {
   comment: Comment;
   depth?: number;
@@ -270,6 +320,8 @@ function CommentItem({
   onReplySubmitted: () => void;
   onEditSubmitted: () => void;
   onDelete: (id: string) => void;
+  // v2.15-WP03: surface non-2xx reply/edit errors to the page banner.
+  onActionError: (msg: string) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [showAllReplies, setShowAllReplies] = useState(false);
@@ -296,13 +348,14 @@ function CommentItem({
         credentials: "include",
         body: JSON.stringify({ body: replyText.trim(), parent_comment_id: comment.id }),
       });
-      if (res.ok) {
-        setReplyText("");
-        setShowReply(false);
-        onReplySubmitted();
+      if (!res.ok) {
+        await throwParsed(res, "Failed to submit reply");
       }
-    } catch {
-      // ignore
+      setReplyText("");
+      setShowReply(false);
+      onReplySubmitted();
+    } catch (err) {
+      onActionError((err as Error).message || "Failed to submit reply");
     } finally {
       setSubmittingReply(false);
     }
@@ -318,12 +371,13 @@ function CommentItem({
         credentials: "include",
         body: JSON.stringify({ body: editText.trim() }),
       });
-      if (res.ok) {
-        setEditing(false);
-        onEditSubmitted();
+      if (!res.ok) {
+        await throwParsed(res, "Failed to save edit");
       }
-    } catch {
-      // ignore
+      setEditing(false);
+      onEditSubmitted();
+    } catch (err) {
+      onActionError((err as Error).message || "Failed to save edit");
     } finally {
       setSavingEdit(false);
     }
@@ -449,6 +503,7 @@ function CommentItem({
               onReplySubmitted={onReplySubmitted}
               onEditSubmitted={onEditSubmitted}
               onDelete={onDelete}
+              onActionError={onActionError}
             />
           ))}
           {!showAllReplies && hiddenCount > 0 && (
@@ -487,6 +542,9 @@ export default function ProblemDetail() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // v2.15-WP03: separate surface for action/hydration errors so they
+  // don't replace the entire page like `error` (full-page replace) does.
+  const [actionError, setActionError] = useState<string | null>(null);
   const [upstarring, setUpstarring] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [newComment, setNewComment] = useState("");
@@ -503,11 +561,11 @@ export default function ProblemDetail() {
   const [suggestText, setSuggestText] = useState("");
   const [suggestReason, setSuggestReason] = useState("");
   const [submittingSuggest, setSubmittingSuggest] = useState(false);
-  const [editSuggestions, setEditSuggestions] = useState<any[]>([]);
+  const [editSuggestions, setEditSuggestions] = useState<EditSuggestionRead[]>([]);
   const [editingDescription, setEditingDescription] = useState(false);
   const [editDescText, setEditDescText] = useState("");
   const [savingDesc, setSavingDesc] = useState(false);
-  const [attachments, setAttachments] = useState<any[]>([]);
+  const [attachments, setAttachments] = useState<AttachmentRead[]>([]);
 
   const currentUserId = user?.id ?? null;
 
@@ -516,7 +574,14 @@ export default function ProblemDetail() {
     setError(null);
     try {
       const res = await fetch(`/api/problems/${id}`, { credentials: "include" });
-      if (!res.ok) throw new Error(`Failed to load problem (${res.status})`);
+      if (!res.ok) {
+        // v2.14-WP04: route through parseApiError so the structured
+        // envelope's `message` (and code/correlation_id transit) is
+        // surfaced instead of `Failed to load problem (NNN)`.
+        const body = await res.json().catch(() => null);
+        const parsed = parseApiError(res, body);
+        throw new Error(parsed.message);
+      }
       const data: ProblemFull = await res.json();
       setProblem(data);
     } catch (err) {
@@ -529,69 +594,79 @@ export default function ProblemDetail() {
   const fetchSolutions = useCallback(async () => {
     try {
       const res = await fetch(`/api/problems/${id}/solutions`, { credentials: "include" });
-      if (res.ok) {
-        const data = await res.json();
-        const list: Solution[] = Array.isArray(data) ? data : data.items ?? data.solutions ?? [];
-        setSolutions(list);
-        // Hydrate upvoted set from API response
-        const upvoted = new Set<string>();
-        for (const s of list) {
-          if (s.is_upvoted) upvoted.add(s.id);
-        }
-        setUpvotedSolutions(upvoted);
+      if (!res.ok) {
+        await throwParsed(res, "Failed to load solutions");
       }
-    } catch {
-      // non-critical
+      const data = await res.json();
+      const list: Solution[] = Array.isArray(data) ? data : data.items ?? data.solutions ?? [];
+      setSolutions(list);
+      // Hydrate upvoted set from API response
+      const upvoted = new Set<string>();
+      for (const s of list) {
+        if (s.is_upvoted) upvoted.add(s.id);
+      }
+      setUpvotedSolutions(upvoted);
+    } catch (err) {
+      setActionError((err as Error).message || "Failed to load solutions");
     }
   }, [id]);
 
   const fetchComments = useCallback(async () => {
     try {
       const res = await fetch(`/api/problems/${id}/comments`, { credentials: "include" });
-      if (res.ok) {
-        const data = await res.json();
-        const list = Array.isArray(data) ? data : data.items ?? data.comments ?? [];
-        // Reverse top-level so newest first
-        setComments(list.reverse());
+      if (!res.ok) {
+        await throwParsed(res, "Failed to load comments");
       }
-    } catch {
-      // non-critical
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : data.items ?? data.comments ?? [];
+      // Reverse top-level so newest first
+      setComments(list.reverse());
+    } catch (err) {
+      setActionError((err as Error).message || "Failed to load comments");
     }
   }, [id]);
 
   const fetchWatch = useCallback(async () => {
     try {
       const res = await fetch(`/api/problems/${id}/watch`, { credentials: "include" });
-      if (res.ok) {
-        const data = await res.json();
-        setWatchLevel(data.level ?? null);
-      } else {
-        setWatchLevel(null);
+      if (!res.ok) {
+        // 404 here means "no watch set" — preserve legacy null behavior;
+        // surface other non-2xx via setActionError.
+        if (res.status === 404) {
+          setWatchLevel(null);
+          return;
+        }
+        await throwParsed(res, "Failed to load watch state");
       }
-    } catch {
+      const data = await res.json();
+      setWatchLevel(data.level ?? null);
+    } catch (err) {
       setWatchLevel(null);
+      setActionError((err as Error).message || "Failed to load watch state");
     }
   }, [id]);
 
   const fetchAttachments = useCallback(async () => {
     try {
       const res = await fetch(`/api/problems/${id}/attachments`, { credentials: "include" });
-      if (res.ok) {
-        setAttachments(await res.json());
+      if (!res.ok) {
+        await throwParsed(res, "Failed to load attachments");
       }
-    } catch {
-      // non-critical
+      setAttachments(await res.json());
+    } catch (err) {
+      setActionError((err as Error).message || "Failed to load attachments");
     }
   }, [id]);
 
   const fetchEditSuggestions = useCallback(async () => {
     try {
       const res = await fetch(`/api/problems/${id}/edit-suggestions`, { credentials: "include" });
-      if (res.ok) {
-        setEditSuggestions(await res.json());
+      if (!res.ok) {
+        await throwParsed(res, "Failed to load edit suggestions");
       }
-    } catch {
-      // non-critical
+      setEditSuggestions(await res.json());
+    } catch (err) {
+      setActionError((err as Error).message || "Failed to load edit suggestions");
     }
   }, [id]);
 
@@ -617,20 +692,21 @@ export default function ProblemDetail() {
         method: "POST",
         credentials: "include",
       });
-      if (res.ok) {
-        const data = await res.json();
-        setProblem((prev) =>
-          prev
-            ? {
-                ...prev,
-                is_upstarred: data.active,
-                upstar_count: data.count,
-              }
-            : prev,
-        );
+      if (!res.ok) {
+        await throwParsed(res, "Failed to upstar");
       }
-    } catch {
-      // ignore
+      const data = await res.json();
+      setProblem((prev) =>
+        prev
+          ? {
+              ...prev,
+              is_upstarred: data.active,
+              upstar_count: data.count,
+            }
+          : prev,
+      );
+    } catch (err) {
+      setActionError((err as Error).message || "Failed to upstar");
     } finally {
       setUpstarring(false);
     }
@@ -644,11 +720,12 @@ export default function ProblemDetail() {
         method: "POST",
         credentials: "include",
       });
-      if (res.ok) {
-        fetchProblem();
+      if (!res.ok) {
+        await throwParsed(res, "Failed to claim");
       }
-    } catch {
-      // ignore
+      fetchProblem();
+    } catch (err) {
+      setActionError((err as Error).message || "Failed to claim");
     } finally {
       setClaiming(false);
     }
@@ -659,10 +736,13 @@ export default function ProblemDetail() {
     setShowWatchMenu(false);
     try {
       if (level === "none" && watchLevel !== null) {
-        await fetch(`/api/problems/${id}/watch`, {
+        const res = await fetch(`/api/problems/${id}/watch`, {
           method: "DELETE",
           credentials: "include",
         });
+        if (!res.ok && res.status !== 204) {
+          await throwParsed(res, "Failed to update watch");
+        }
         setWatchLevel(null);
       } else {
         const res = await fetch(`/api/problems/${id}/watch`, {
@@ -671,12 +751,13 @@ export default function ProblemDetail() {
           credentials: "include",
           body: JSON.stringify({ level }),
         });
-        if (res.ok) {
-          setWatchLevel(level);
+        if (!res.ok) {
+          await throwParsed(res, "Failed to update watch");
         }
+        setWatchLevel(level);
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      setActionError((err as Error).message || "Failed to update watch");
     } finally {
       setWatchLoading(false);
     }
@@ -689,21 +770,22 @@ export default function ProblemDetail() {
         method: "POST",
         credentials: "include",
       });
-      if (res.ok) {
-        const data = await res.json();
-        setUpvotedSolutions((prev) => {
-          const next = new Set(prev);
-          if (data.active) {
-            next.add(solutionId);
-          } else {
-            next.delete(solutionId);
-          }
-          return next;
-        });
-        fetchSolutions();
+      if (!res.ok) {
+        await throwParsed(res, "Failed to upvote");
       }
-    } catch {
-      // ignore
+      const data = await res.json();
+      setUpvotedSolutions((prev) => {
+        const next = new Set(prev);
+        if (data.active) {
+          next.add(solutionId);
+        } else {
+          next.delete(solutionId);
+        }
+        return next;
+      });
+      fetchSolutions();
+    } catch (err) {
+      setActionError((err as Error).message || "Failed to upvote");
     }
   }
 
@@ -715,11 +797,12 @@ export default function ProblemDetail() {
         credentials: "include",
         body: JSON.stringify({ description }),
       });
-      if (res.ok) {
-        fetchSolutions();
+      if (!res.ok) {
+        await throwParsed(res, "Failed to edit solution");
       }
-    } catch {
-      // ignore
+      fetchSolutions();
+    } catch (err) {
+      setActionError((err as Error).message || "Failed to edit solution");
     }
   }
 
@@ -731,13 +814,14 @@ export default function ProblemDetail() {
         credentials: "include",
         body: JSON.stringify({ status: newStatus }),
       });
-      if (res.ok) {
-        setSolutions((prev) =>
-          prev.map((s) => (s.id === solutionId ? { ...s, status: newStatus } : s))
-        );
+      if (!res.ok) {
+        await throwParsed(res, "Failed to update solution status");
       }
-    } catch {
-      // ignore
+      setSolutions((prev) =>
+        prev.map((s) => (s.id === solutionId ? { ...s, status: newStatus } : s))
+      );
+    } catch (err) {
+      setActionError((err as Error).message || "Failed to update solution status");
     }
   }
 
@@ -748,11 +832,12 @@ export default function ProblemDetail() {
         method: "DELETE",
         credentials: "include",
       });
-      if (res.ok || res.status === 204) {
-        navigate("/problems");
+      if (!res.ok && res.status !== 204) {
+        await throwParsed(res, "Failed to delete problem");
       }
-    } catch {
-      // ignore
+      navigate("/problems");
+    } catch (err) {
+      setActionError((err as Error).message || "Failed to delete problem");
     }
   }
 
@@ -763,12 +848,13 @@ export default function ProblemDetail() {
         method: "DELETE",
         credentials: "include",
       });
-      if (res.ok || res.status === 204) {
-        setSolutions((prev) => prev.filter((s) => s.id !== solutionId));
-        fetchProblem();
+      if (!res.ok && res.status !== 204) {
+        await throwParsed(res, "Failed to delete solution");
       }
-    } catch {
-      // ignore
+      setSolutions((prev) => prev.filter((s) => s.id !== solutionId));
+      fetchProblem();
+    } catch (err) {
+      setActionError((err as Error).message || "Failed to delete solution");
     }
   }
 
@@ -779,12 +865,13 @@ export default function ProblemDetail() {
         method: "DELETE",
         credentials: "include",
       });
-      if (res.ok || res.status === 204) {
-        fetchComments();
-        fetchProblem();
+      if (!res.ok && res.status !== 204) {
+        await throwParsed(res, "Failed to delete comment");
       }
-    } catch {
-      // ignore
+      fetchComments();
+      fetchProblem();
+    } catch (err) {
+      setActionError((err as Error).message || "Failed to delete comment");
     }
   }
 
@@ -799,13 +886,14 @@ export default function ProblemDetail() {
         credentials: "include",
         body: JSON.stringify({ body: newComment.trim(), is_anonymous: isAnonymous }),
       });
-      if (res.ok) {
-        setNewComment("");
-        fetchComments();
-        fetchProblem();
+      if (!res.ok) {
+        await throwParsed(res, "Failed to submit comment");
       }
-    } catch {
-      // ignore
+      setNewComment("");
+      fetchComments();
+      fetchProblem();
+    } catch (err) {
+      setActionError((err as Error).message || "Failed to submit comment");
     } finally {
       setSubmittingComment(false);
     }
@@ -822,13 +910,14 @@ export default function ProblemDetail() {
         credentials: "include",
         body: JSON.stringify({ description: newSolution.trim(), is_anonymous: isAnonymous }),
       });
-      if (res.ok) {
-        setNewSolution("");
-        fetchSolutions();
-        fetchProblem();
+      if (!res.ok) {
+        await throwParsed(res, "Failed to submit solution");
       }
-    } catch {
-      // ignore
+      setNewSolution("");
+      fetchSolutions();
+      fetchProblem();
+    } catch (err) {
+      setActionError((err as Error).message || "Failed to submit solution");
     } finally {
       setSubmittingSolution(false);
     }
@@ -845,12 +934,13 @@ export default function ProblemDetail() {
         credentials: "include",
         body: JSON.stringify({ description: editDescText.trim() }),
       });
-      if (res.ok) {
-        setEditingDescription(false);
-        fetchProblem();
+      if (!res.ok) {
+        await throwParsed(res, "Failed to save description");
       }
-    } catch {
-      // ignore
+      setEditingDescription(false);
+      fetchProblem();
+    } catch (err) {
+      setActionError((err as Error).message || "Failed to save description");
     } finally {
       setSavingDesc(false);
     }
@@ -859,18 +949,25 @@ export default function ProblemDetail() {
   async function handleUploadAttachment(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files || files.length === 0) return;
+    const failed: string[] = [];
     for (const file of Array.from(files)) {
       const formData = new FormData();
       formData.append("file", file);
       try {
-        await fetch(`/api/problems/${id}/attachments`, {
+        const res = await fetch(`/api/problems/${id}/attachments`, {
           method: "POST",
           credentials: "include",
           body: formData,
         });
+        if (!res.ok) {
+          failed.push(file.name);
+        }
       } catch {
-        // ignore
+        failed.push(file.name);
       }
+    }
+    if (failed.length > 0) {
+      setActionError(`Failed to upload: ${failed.join(", ")}`);
     }
     fetchAttachments();
     e.target.value = "";
@@ -890,14 +987,15 @@ export default function ProblemDetail() {
           reason: suggestReason.trim() || null,
         }),
       });
-      if (res.ok) {
-        setSuggestText("");
-        setSuggestReason("");
-        setShowSuggestEdit(false);
-        fetchEditSuggestions();
+      if (!res.ok) {
+        await throwParsed(res, "Failed to submit suggestion");
       }
-    } catch {
-      // ignore
+      setSuggestText("");
+      setSuggestReason("");
+      setShowSuggestEdit(false);
+      fetchEditSuggestions();
+    } catch (err) {
+      setActionError((err as Error).message || "Failed to submit suggestion");
     } finally {
       setSubmittingSuggest(false);
     }
@@ -909,12 +1007,13 @@ export default function ProblemDetail() {
         method: "POST",
         credentials: "include",
       });
-      if (res.ok) {
-        fetchProblem();
-        fetchEditSuggestions();
+      if (!res.ok) {
+        await throwParsed(res, "Failed to accept suggestion");
       }
-    } catch {
-      // ignore
+      fetchProblem();
+      fetchEditSuggestions();
+    } catch (err) {
+      setActionError((err as Error).message || "Failed to accept suggestion");
     }
   }
 
@@ -924,11 +1023,12 @@ export default function ProblemDetail() {
         method: "POST",
         credentials: "include",
       });
-      if (res.ok) {
-        fetchEditSuggestions();
+      if (!res.ok) {
+        await throwParsed(res, "Failed to reject suggestion");
       }
-    } catch {
-      // ignore
+      fetchEditSuggestions();
+    } catch (err) {
+      setActionError((err as Error).message || "Failed to reject suggestion");
     }
   }
 
@@ -949,7 +1049,7 @@ export default function ProblemDetail() {
       <div className="problem-detail">
         <div className="problem-detail__error" role="alert">
           <p>{error || "Problem not found"}</p>
-          <button className="problem-detail__retry-btn" onClick={fetchProblem}>
+          <button className="problem-detail__retry-btn" onClick={() => fetchProblem()}>
             Retry
           </button>
         </div>
@@ -957,157 +1057,35 @@ export default function ProblemDetail() {
     );
   }
 
+  const canManageProblem = isAuthenticated && (currentUserId === problem.author?.id || user?.role === "admin");
+
   return (
     <div className="problem-detail">
+      <main className="problem-detail__main">
+      {/* v2.15-WP03: inline action-error banner — dismissible, non-blocking. */}
+      {actionError && (
+        <div
+          className="problem-detail__action-error"
+          role="alert"
+          data-testid="problem-detail-action-error"
+        >
+          <span>{actionError}</span>
+          <button
+            type="button"
+            className="problem-detail__action-error-dismiss"
+            onClick={() => setActionError(null)}
+            aria-label="Dismiss error"
+          >
+            ×
+          </button>
+        </div>
+      )}
       {/* Header */}
       <header className="problem-detail__header">
-        <div className="problem-detail__title-row">
-          <h1 className="problem-detail__title">
-            {problem.display_id && <span className="problem-detail__display-id">{problem.display_id}</span>}
-            {problem.title}
-          </h1>
-          {isAuthenticated && (currentUserId === problem.author?.id || user?.role === "admin") ? (
-            <div className="problem-detail__status-wrap">
-              <button
-                className={`status-badge status-badge--${problem.status} problem-detail__status-trigger`}
-                onClick={() => setShowStatusMenu(!showStatusMenu)}
-                disabled={transitioning}
-              >
-                {ALL_STATUSES.find((s) => s.value === problem.status)?.label ?? problem.status}
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: 4 }}>
-                  <path d="M6 9l6 6 6-6" />
-                </svg>
-              </button>
-              {showStatusMenu && (
-                <div className="problem-detail__status-menu">
-                  {ALL_STATUSES.map((s) => (
-                    <button
-                      key={s.value}
-                      className={`problem-detail__status-menu-item status-badge status-badge--${s.value}${s.value === problem.status ? " problem-detail__status-menu-item--current" : ""}`}
-                      onClick={async () => {
-                        setShowStatusMenu(false);
-                        if (s.value === problem.status) return;
-                        setTransitioning(true);
-                        try {
-                          const res = await fetch(`/api/problems/${id}/status`, {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            credentials: "include",
-                            body: JSON.stringify({ status: s.value }),
-                          });
-                          if (res.ok) {
-                            fetchProblem();
-                          } else {
-                            const data = await res.json().catch(() => null);
-                            alert(data?.detail ?? "Status transition failed");
-                          }
-                        } catch {
-                          // ignore
-                        } finally {
-                          setTransitioning(false);
-                        }
-                      }}
-                    >
-                      {s.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <StatusBadge status={problem.status} />
-          )}
-        </div>
-
-        <div className="problem-detail__meta">
-          <span>by {problem.author?.display_name ?? "Anonymous"}</span>
-          <span title={formatDate(problem.created_at)}>
-            {relativeTime(problem.created_at)}
-          </span>
-        </div>
-
-        <div className="problem-detail__actions">
-          {/* Upstar */}
-          <button
-            className={`problem-detail__upstar-btn${problem.is_upstarred ? " problem-detail__upstar-btn--active" : ""}`}
-            onClick={handleUpstar}
-            disabled={upstarring || !isAuthenticated}
-            aria-label={problem.is_upstarred ? "Remove upstar" : "Upstar this problem"}
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              aria-hidden="true"
-            >
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-            </svg>
-            <span>{problem.upstar_count}</span>
-          </button>
-
-          {/* Claim */}
-          {(problem.status === "open" || problem.status === "claimed") && (
-            <button
-              className={`problem-detail__claim-btn${problem.is_claimed ? " problem-detail__claim-btn--active" : ""}`}
-              onClick={handleClaim}
-              disabled={claiming || !isAuthenticated}
-            >
-              {problem.is_claimed ? "Unclaim" : "Claim"}
-            </button>
-          )}
-
-          {/* Watch */}
-          {isAuthenticated && (
-            <div className="problem-detail__watch-wrap">
-              <button
-                className={`problem-detail__watch-btn${watchLevel && watchLevel !== "none" ? " problem-detail__watch-btn--active" : ""}`}
-                onClick={() => setShowWatchMenu(!showWatchMenu)}
-                disabled={watchLoading}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                  <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />
-                </svg>
-                <span>{watchLevel && watchLevel !== "none" ? WATCH_LABELS[watchLevel] : "Watch"}</span>
-              </button>
-              {showWatchMenu && (
-                <div className="problem-detail__watch-menu">
-                  {(Object.keys(WATCH_LABELS) as WatchLevel[]).map((level) => (
-                    <button
-                      key={level}
-                      className={`problem-detail__watch-option${watchLevel === level ? " problem-detail__watch-option--active" : ""}`}
-                      onClick={() => handleSetWatch(level)}
-                    >
-                      {WATCH_LABELS[level]}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Delete Problem */}
-          {isAuthenticated && (currentUserId === problem.author?.id || user?.role === "admin") && (
-            <button
-              className="problem-detail__delete-btn"
-              onClick={handleDeleteProblem}
-            >
-              Delete
-            </button>
-          )}
-
-        </div>
-
-        <div className="problem-detail__tags">
-          {problem.category && <span className="problem-detail__category-pill">{problem.category.name}</span>}
-          {problem.tags.map((tag) => (
-            <span key={tag.id} className="problem-detail__tag">
-              {tag.name}
-            </span>
-          ))}
-        </div>
+        <h1 className="problem-detail__title">
+          {problem.display_id && <span className="problem-detail__display-id">{problem.display_id}</span>}
+          {problem.title}
+        </h1>
       </header>
 
       {/* Description */}
@@ -1136,12 +1114,14 @@ export default function ProblemDetail() {
 
         {editingDescription ? (
           <form className="problem-detail__suggest-form" onSubmit={handleSaveDescription}>
-            <textarea
-              className="problem-detail__textarea"
-              value={editDescText}
-              onChange={(e) => setEditDescText(e.target.value)}
-              rows={6}
-            />
+            <Suspense fallback={<div className="problem-detail__editor-loading">Loading editor…</div>}>
+              <RichEditor
+                value={editDescText}
+                onChange={setEditDescText}
+                minHeight="20rem"
+                placeholder="Edit description..."
+              />
+            </Suspense>
             <div className="comment-item__reply-actions">
               <button
                 type="submit"
@@ -1207,7 +1187,7 @@ export default function ProblemDetail() {
             <h3 className="problem-detail__section-title" style={{ marginTop: "1rem" }}>
               Pending Edit Suggestions ({editSuggestions.length})
             </h3>
-            {editSuggestions.map((s: any) => (
+            {editSuggestions.map((s) => (
               <div key={s.id} className="problem-detail__suggestion-card">
                 <div className="problem-detail__suggestion-header">
                   <span className="comment-item__author">{s.author?.display_name ?? "Anonymous"}</span>
@@ -1240,8 +1220,8 @@ export default function ProblemDetail() {
           <div className="problem-detail__section-header">
             <h2 className="problem-detail__section-title">Supporting Documents</h2>
             {isAuthenticated && currentUserId === problem.author?.id && (
-              <label className="comment-item__action-btn" style={{ cursor: "pointer" }}>
-                + Add File
+              <label className="comment-item__action-btn" style={{ cursor: "pointer", fontSize: "1.5rem", lineHeight: 1, padding: 0, width: "2rem", height: "2rem", display: "inline-flex", alignItems: "center", justifyContent: "center" }} aria-label="Add file" title="Add file">
+                +
                 <input
                   type="file"
                   accept="image/*,.pdf,.txt"
@@ -1258,7 +1238,7 @@ export default function ProblemDetail() {
             </p>
           ) : (
             <div className="problem-detail__attachment-list">
-              {attachments.map((att: any) => {
+              {attachments.map((att) => {
                 const viewUrl = `/api/attachments/${att.id}/download`;
                 const isImage = att.content_type?.startsWith("image/");
                 const isPdf = att.content_type === "application/pdf";
@@ -1395,12 +1375,175 @@ export default function ProblemDetail() {
                   onReplySubmitted={() => { fetchComments(); fetchProblem(); }}
                   onEditSubmitted={() => fetchComments()}
                   onDelete={handleDeleteComment}
+                  onActionError={setActionError}
                 />
               ))
             )}
           </div>
         )}
       </div>
+      </main>
+
+      {/* Right details panel */}
+      <aside className="problem-detail__sidebar" aria-label="Details">
+        <div className="problem-detail__sidebar-status">
+          {canManageProblem ? (
+            <div className="problem-detail__status-wrap">
+              <button
+                className={`status-badge status-badge--${problem.status} problem-detail__status-trigger`}
+                onClick={() => setShowStatusMenu(!showStatusMenu)}
+                disabled={transitioning}
+              >
+                {ALL_STATUSES.find((s) => s.value === problem.status)?.label ?? problem.status}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: 6 }}>
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+              {showStatusMenu && (
+                <div className="problem-detail__status-menu">
+                  {ALL_STATUSES.map((s) => (
+                    <button
+                      key={s.value}
+                      className={`problem-detail__status-menu-item status-badge status-badge--${s.value}${s.value === problem.status ? " problem-detail__status-menu-item--current" : ""}`}
+                      onClick={async () => {
+                        setShowStatusMenu(false);
+                        if (s.value === problem.status) return;
+                        setTransitioning(true);
+                        try {
+                          const res = await fetch(`/api/problems/${id}/status`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            credentials: "include",
+                            body: JSON.stringify({ status: s.value }),
+                          });
+                          if (!res.ok) {
+                            await throwParsed(res, "Status transition failed");
+                          }
+                          fetchProblem();
+                        } catch (err) {
+                          setActionError((err as Error).message || "Status transition failed");
+                        } finally {
+                          setTransitioning(false);
+                        }
+                      }}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <StatusBadge status={problem.status} />
+          )}
+          {/* v2.29 S5 (audit P1#5) — Problem→Ticket bridge. Prefills the
+              ticket form with the problem title and a back-link so the
+              ticket stays traceable to its originating problem. */}
+          <Link
+            className="problem-detail__create-ticket-link"
+            data-testid="create-ticket-from-problem"
+            to={`/tickets/new?title=${encodeURIComponent(problem.title)}&description=${encodeURIComponent(
+              `Created from problem: ${window.location.origin}/problems/${problem.id}\n\n${problem.description ?? ""}`,
+            )}`}
+          >
+            Create Ticket from Problem
+          </Link>
+        </div>
+
+        <div className="problem-detail__sidebar-actions">
+          <button
+            className={`problem-detail__upstar-btn${problem.is_upstarred ? " problem-detail__upstar-btn--active" : ""}`}
+            onClick={handleUpstar}
+            disabled={upstarring || !isAuthenticated}
+            aria-label={problem.is_upstarred ? "Remove upstar" : "Upstar this problem"}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+            </svg>
+            <span>{problem.upstar_count}</span>
+          </button>
+
+          {(problem.status === "open" || problem.status === "claimed") && (
+            <button
+              className={`problem-detail__claim-btn${problem.is_claimed ? " problem-detail__claim-btn--active" : ""}`}
+              onClick={handleClaim}
+              disabled={claiming || !isAuthenticated}
+            >
+              {problem.is_claimed ? "Unclaim" : "Claim"}
+            </button>
+          )}
+
+          {isAuthenticated && (
+            <div className="problem-detail__watch-wrap">
+              <button
+                className={`problem-detail__watch-btn${watchLevel && watchLevel !== "none" ? " problem-detail__watch-btn--active" : ""}`}
+                onClick={() => setShowWatchMenu(!showWatchMenu)}
+                disabled={watchLoading}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />
+                </svg>
+                <span>{watchLevel && watchLevel !== "none" ? WATCH_LABELS[watchLevel] : "Watch"}</span>
+              </button>
+              {showWatchMenu && (
+                <div className="problem-detail__watch-menu">
+                  {(Object.keys(WATCH_LABELS) as WatchLevel[]).map((level) => (
+                    <button
+                      key={level}
+                      className={`problem-detail__watch-option${watchLevel === level ? " problem-detail__watch-option--active" : ""}`}
+                      onClick={() => handleSetWatch(level)}
+                    >
+                      {WATCH_LABELS[level]}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="problem-detail__sidebar-section">
+          <div className="problem-detail__field">
+            <div className="problem-detail__field-label">Reporter</div>
+            <div className="problem-detail__field-value">{problem.author?.display_name ?? "Anonymous"}</div>
+          </div>
+
+          <div className="problem-detail__field">
+            <div className="problem-detail__field-label">Created</div>
+            <div className="problem-detail__field-value" title={formatDate(problem.created_at)}>
+              {relativeTime(problem.created_at)}
+            </div>
+          </div>
+
+          {problem.category && (
+            <div className="problem-detail__field">
+              <div className="problem-detail__field-label">Category</div>
+              <div className="problem-detail__field-value">
+                <span className="problem-detail__category-pill">{problem.category.name}</span>
+              </div>
+            </div>
+          )}
+
+          {problem.tags.length > 0 && (
+            <div className="problem-detail__field">
+              <div className="problem-detail__field-label">Tags</div>
+              <div className="problem-detail__field-value problem-detail__tags">
+                {problem.tags.map((tag) => (
+                  <span key={tag.id} className="problem-detail__tag">{tag.name}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {canManageProblem && (
+          <div className="problem-detail__sidebar-actions">
+            <button className="problem-detail__delete-btn" onClick={handleDeleteProblem}>
+              Delete
+            </button>
+          </div>
+        )}
+      </aside>
     </div>
   );
 }

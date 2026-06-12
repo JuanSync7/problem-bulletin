@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { ProblemCard } from "../components/ProblemCard";
 import { SortFilterBar } from "../components/SortFilterBar";
 import { EmptyState } from "../components/EmptyState";
 import type { ProblemSummary } from "../components/ProblemCard";
 import type { SortOption } from "../components/SortFilterBar";
 import type { ProblemStatus } from "../components/StatusBadge";
+import { parseApiError } from "../api/errors";
 import "./Feed.css";
 
 interface FeedResponse {
@@ -91,7 +93,11 @@ export default function Feed() {
         });
 
         if (!res.ok) {
-          throw new Error(`Failed to load problems (${res.status})`);
+          // v2.14-WP04: surface backend's structured envelope message
+          // (code/correlation_id preserved) instead of bare `HTTP N`.
+          const body = await res.json().catch(() => null);
+          const parsed = parseApiError(res, body);
+          throw new Error(parsed.message);
         }
 
         const data: FeedResponse = await res.json();
@@ -148,6 +154,10 @@ export default function Feed() {
     <div className="feed">
       <div className="feed__header">
         <h1 className="feed__title">Problems</h1>
+        {/* v2.29 IA: submit action lives in feed context, not the sidebar */}
+        <Link to="/submit" className="feed__submit-btn">
+          + Submit Problem
+        </Link>
       </div>
 
       <SortFilterBar

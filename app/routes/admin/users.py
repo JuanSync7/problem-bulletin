@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.dependencies import AdminUser
 from app.database import get_db
 from app.services.admin import search_users, update_user_role, update_user_status
 
@@ -54,10 +55,11 @@ async def list_users(
 async def change_user_role(
     user_id: UUID,
     body: RoleUpdate,
+    admin: AdminUser,
     db: AsyncSession = Depends(get_db),
 ):
     """Update a user's role."""
-    user = await update_user_role(db, user_id, body.role)
+    user = await update_user_role(db, user_id, body.role, actor_id=admin.id)
     return user
 
 
@@ -65,8 +67,9 @@ async def change_user_role(
 async def change_user_status(
     user_id: UUID,
     body: StatusUpdate,
+    admin: AdminUser,
     db: AsyncSession = Depends(get_db),
 ):
     """Toggle a user's active/inactive status."""
-    user = await update_user_status(db, user_id, body.is_active)
+    user = await update_user_status(db, user_id, body.is_active, actor_id=admin.id)
     return user

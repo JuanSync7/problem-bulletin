@@ -1,0 +1,238 @@
+/* ===========================
+   Create Ticket Page (v2)
+   =========================== */
+
+.create-ticket-page {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0.5rem 0 4rem;
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.create-ticket-page__title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.create-ticket-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* ===========================
+   Type picker (pill bar)
+   =========================== */
+
+.create-ticket-type-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+
+.create-ticket-type-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.create-ticket-type-pill:hover {
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+.create-ticket-type-pill--active {
+  background: var(--color-surface);
+  border-color: var(--color-primary-start);
+  color: var(--color-text);
+}
+
+.create-ticket-type-pill__badge {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+/* ===========================
+   Inline two-column rows
+   =========================== */
+
+.create-ticket-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 720px) {
+  .create-ticket-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ===========================
+   Priority segmented control
+   =========================== */
+
+.create-ticket-priority {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--color-bg);
+}
+
+.create-ticket-priority__btn {
+  padding: 0.5rem 0.875rem;
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.create-ticket-priority__btn:last-child {
+  border-right: none;
+}
+
+.create-ticket-priority__btn--active {
+  background: var(--color-primary-start);
+  color: #1a1a1a;
+}
+
+/* ===========================
+   Parent picker (async search)
+   =========================== */
+
+.create-ticket-parent {
+  position: relative;
+}
+
+.create-ticket-parent__results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  margin-top: 0.25rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  max-height: 240px;
+  overflow-y: auto;
+  list-style: none;
+  padding: 0.25rem 0;
+}
+
+.create-ticket-parent__option {
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--color-text);
+}
+
+.create-ticket-parent__option:hover {
+  background: var(--color-bg);
+}
+
+.create-ticket-parent__option-key {
+  font-weight: 700;
+  margin-right: 0.5rem;
+  color: var(--color-text-secondary);
+}
+
+.create-ticket-parent__selected {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  font-size: 0.8125rem;
+}
+
+.create-ticket-parent__clear {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+/* ===========================
+   Assignee picker badge
+   =========================== */
+
+.create-ticket-assignee__badge {
+  display: inline-flex;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 4px;
+  background: var(--color-primary-start);
+  color: #1a1a1a;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  margin-right: 0.375rem;
+  text-transform: uppercase;
+}
+
+/* ===========================
+   Form actions
+   =========================== */
+
+.create-ticket-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.create-ticket-btn {
+  padding: 0.625rem 1.25rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.create-ticket-btn--primary {
+  background: var(--gradient-primary, var(--color-primary-start));
+  color: #1a1a1a;
+  border-color: transparent;
+}
+
+.create-ticket-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

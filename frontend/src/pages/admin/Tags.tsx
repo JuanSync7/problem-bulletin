@@ -1,7 +1,15 @@
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AdminRouteGuard } from "../../components/AdminRouteGuard";
 import { useToast } from "../../contexts/ToastContext";
+import { parseApiError } from "../../api/errors";
 import "./Admin.css";
+
+// v2.14-WP04: throw with backend's parsed envelope message.
+async function throwParsed(res: Response, fallback: string): Promise<never> {
+  const body = await res.json().catch(() => null);
+  const parsed = parseApiError(res, body);
+  throw new Error(parsed.message || fallback);
+}
 
 interface Tag {
   id: string;
@@ -23,11 +31,14 @@ function TagsContent() {
   const fetchTags = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/tags", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch tags");
+      if (!res.ok) await throwParsed(res, "Failed to fetch tags");
       const data: Tag[] = await res.json();
       setTags(data);
-    } catch {
-      toast.show("Failed to load tags", "error");
+    } catch (err) {
+      toast.show(
+        err instanceof Error ? err.message : "Failed to load tags",
+        "error",
+      );
     } finally {
       setLoading(false);
     }
@@ -52,12 +63,15 @@ function TagsContent() {
         credentials: "include",
         body: JSON.stringify({ name: trimmed }),
       });
-      if (!res.ok) throw new Error("Failed to rename tag");
+      if (!res.ok) await throwParsed(res, "Failed to rename tag");
       setEditingId(null);
       toast.show("Tag renamed", "success");
       await fetchTags();
-    } catch {
-      toast.show("Failed to rename tag", "error");
+    } catch (err) {
+      toast.show(
+        err instanceof Error ? err.message : "Failed to rename tag",
+        "error",
+      );
     }
   }
 
@@ -67,12 +81,15 @@ function TagsContent() {
         method: "DELETE",
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to delete tag");
+      if (!res.ok) await throwParsed(res, "Failed to delete tag");
       setConfirmDeleteId(null);
       toast.show("Tag deleted", "success");
       await fetchTags();
-    } catch {
-      toast.show("Failed to delete tag", "error");
+    } catch (err) {
+      toast.show(
+        err instanceof Error ? err.message : "Failed to delete tag",
+        "error",
+      );
     }
   }
 
@@ -89,13 +106,16 @@ function TagsContent() {
           targetId: mergeTargetId,
         }),
       });
-      if (!res.ok) throw new Error("Failed to merge tags");
+      if (!res.ok) await throwParsed(res, "Failed to merge tags");
       setMergeSourceId(null);
       setMergeTargetId("");
       toast.show("Tags merged", "success");
       await fetchTags();
-    } catch {
-      toast.show("Failed to merge tags", "error");
+    } catch (err) {
+      toast.show(
+        err instanceof Error ? err.message : "Failed to merge tags",
+        "error",
+      );
     }
   }
 

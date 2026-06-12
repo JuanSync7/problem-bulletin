@@ -69,27 +69,77 @@
    =========================== */
 
 .problem-card {
+  position: relative;
   display: flex;
   gap: 1rem;
-  padding: 1rem 1.25rem;
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
+  padding: 1.125rem 1.25rem 1.125rem 1.375rem;
+  background-color: var(--card-tint);
+  border: none;
+  border-radius: var(--card-radius);
   cursor: pointer;
-  transition:
-    border-color var(--transition-speed),
-    box-shadow var(--transition-speed);
+  transform: translateZ(0);
+  transition: var(--card-transition);
+  opacity: 0;
+  animation: card-stagger-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  font-feature-settings: "ss01", "cv11";
+}
+
+.problem-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12%;
+  bottom: 12%;
+  width: var(--card-rail-width);
+  border-radius: 0 2px 2px 0;
+  background: var(--gradient-primary);
+  opacity: 0;
+  transform: scaleY(0.4);
+  transform-origin: center;
+  transition: opacity 0.22s ease, transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .problem-card:hover {
-  border-color: var(--color-primary-start);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  background-color: var(--card-tint-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--card-shadow-hover);
+}
+
+.problem-card:hover::before {
+  opacity: 1;
+  transform: scaleY(1);
+}
+
+.problem-card:hover .problem-card__title {
+  color: var(--color-text);
+}
+
+.problem-card:hover .problem-card__display-id {
+  filter: brightness(1.08);
+}
+
+.problem-card:hover .problem-card__upstar-count {
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .problem-card:focus-visible {
-  outline: 2px solid var(--color-primary-start);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-primary-start), var(--card-shadow-hover);
 }
+
+/* Staggered entrance — caps at 8 for perf; later items just appear instantly */
+.problem-card:nth-child(1) { animation-delay: 0.02s; }
+.problem-card:nth-child(2) { animation-delay: 0.06s; }
+.problem-card:nth-child(3) { animation-delay: 0.10s; }
+.problem-card:nth-child(4) { animation-delay: 0.14s; }
+.problem-card:nth-child(5) { animation-delay: 0.18s; }
+.problem-card:nth-child(6) { animation-delay: 0.22s; }
+.problem-card:nth-child(7) { animation-delay: 0.26s; }
+.problem-card:nth-child(8) { animation-delay: 0.30s; }
+.problem-card:nth-child(n+9) { animation-delay: 0.32s; }
 
 /* Upstar column */
 
@@ -109,9 +159,12 @@
 }
 
 .problem-card__upstar-count {
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   font-weight: 700;
   color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  transition: color 0.22s ease;
 }
 
 /* Body */
@@ -137,6 +190,8 @@
   font-weight: 700;
   color: var(--color-text);
   line-height: 1.3;
+  letter-spacing: -0.005em;
+  transition: color 0.22s ease;
 }
 
 .problem-card__display-id {

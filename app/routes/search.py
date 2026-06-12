@@ -1,24 +1,350 @@
 """Search routes — full-text search and similar-problem suggestions.
 
 REQ-350 through REQ-364.
+
+WP56: adds GET /search/v2 — multi-entity search backed by search_entities().
 """
 
 from __future__ import annotations
 
+import logging
 import uuid
-from typing import Annotated
+from typing import Annotated, Any as _Any, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from pydantic import BaseModel, model_serializer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.services._pagination import InvalidCursorError
 from app.services.search import search_problems, suggest_similar
+from app.services.search_multi import (
+    _ENTITY_ALIASES,
+    _VALID_ENTITIES,
+    resolve_direct_match,
+    search_entities,
+)
+from app.services.search_typeahead import search_typeahead
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/search", tags=["search"])
 
 
-@router.get("")
+# ---------------------------------------------------------------------------
+# v2.11-WP13 (E1) — v1 /api/search deprecation
+# ---------------------------------------------------------------------------
+#
+# The v1 ``GET /api/search`` endpoint is **deprecated** in favour of
+# ``/api/search/v2`` (multi-entity, cursor-paginated). v2.10-WP09 confirmed
+# zero live callers in source (only stale built artifacts referenced the
+# v1 surface). This module emits RFC 8594 ``Deprecation`` / ``Sunset``
+# headers on every v1 response and logs a WARN-level instrumentation
+# line so any straggling caller surfaces in monitoring before removal.
+#
+# Sunset date: ~60 days from the deprecation landing (2026-05-22) →
+# **Sun, 22 Jul 2026 00:00:00 GMT** (RFC 1123). Update if the monitoring
+# window needs to be extended.
+V1_SEARCH_SUNSET_RFC1123 = "Sun, 22 Jul 2026 00:00:00 GMT"
+
+
+def _resolve_v1_caller(request: Request) -> str:
+    """Best-effort caller resolver for v1 /api/search instrumentation.
+
+    Prefers ``Authorization`` header presence (logged as ``auth:<scheme>``
+    without leaking the credential), falling back to the client IP. Never
+    raises — returns ``"unknown"`` on any failure.
+    """
+    try:
+        auth = request.headers.get("authorization") or request.headers.get("Authorization")
+        if auth:
+            scheme = auth.split(" ", 1)[0] if " " in auth else auth.split(".", 1)[0]
+            return f"auth:{scheme[:16]}"
+        client = getattr(request, "client", None)
+        host = getattr(client, "host", None) if client else None
+        if host:
+            return f"ip:{host}"
+    except Exception:  # pragma: no cover — defensive
+        pass
+    return "unknown"
+
+
+# ---------------------------------------------------------------------------
+# WP56 — Pydantic response models for /v2
+# ---------------------------------------------------------------------------
+
+_ENTITY_VALUES = frozenset(_VALID_ENTITIES)
+
+
+class SearchItem(BaseModel):
+    """Normalised search result item (common shape for all entity arms)."""
+
+    id: str
+    display_id: str | None
+    title: str
+    subtitle: str
+    kind: str
+    href: str
+    rank: float
+    project_id: str | None
+    status: str | None
+
+    model_config = {"extra": "allow"}
+
+
+class SearchArm(BaseModel):
+    """One entity arm: list of items + total count + optional next-page cursor.
+
+    WP62: ``next_cursor`` is an opaque HMAC-signed string. Clients pass it
+    back as the per-arm ``<arm>_cursor`` query param (or ``cursor=`` in
+    single-arm mode) to fetch the next page. ``null`` when there is no
+    next page.
+    """
+
+    items: list[SearchItem]
+    total: int
+    next_cursor: str | None = None
+    # v2.11-WP14 (F1): "snapshot" when ``total`` reflects the WP10 first-page
+    # pinned count; "live" when the caller forced a re-count via
+    # ``refresh_total=1``. Optional from the client's perspective —
+    # absent on older arms is treated as "snapshot".
+    total_authority: str | None = None
+
+
+class SearchV2Response(BaseModel):
+    """Response envelope for GET /search/v2.
+
+    Keys present depend on the ``entity`` query parameter:
+    - ``entity=all``  → all five arms (problems, tickets, components, labels, users)
+    - ``entity=<x>``  → only the ``<x>`` arm
+
+    A-FR-001: ``direct_match`` is included in the response only when the query
+    matches the AION-N regex pattern and a ticket with that display_id exists.
+    When absent (no pattern match or no ticket found), the key is omitted from
+    the JSON envelope — treat an absent key as null.
+
+    A-FR-002: ``combined`` is included only when ``mode=typeahead``. It is
+    omitted (key absent) in ``mode=v2`` (default). When present it contains
+    the merged globally-ranked list of length ≤ 15.
+    """
+
+    problems: SearchArm | None = None
+    tickets: SearchArm | None = None
+    components: SearchArm | None = None
+    labels: SearchArm | None = None
+    users: SearchArm | None = None
+    # v2.29-S6: Share / Bounty spaces
+    share_posts: SearchArm | None = None
+    bounties: SearchArm | None = None
+    direct_match: SearchItem | None = None
+    combined: list[SearchItem] | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_null_fields(
+        self,
+        handler: _Any,
+        info: _Any = None,
+    ) -> dict[str, _Any]:
+        """Exclude ``direct_match`` and ``combined`` from serialized output when None.
+
+        All other None fields (arm fields) are serialized normally so that
+        the caller can distinguish between an arm that was not requested
+        (None) and one that returned zero results (empty items list).
+        """
+        data: dict[str, _Any] = handler(self)
+        if data.get("direct_match") is None:
+            data.pop("direct_match", None)
+        if data.get("combined") is None:
+            data.pop("combined", None)
+        return data
+
+
+@router.get("/v2", response_model=SearchV2Response, summary="Multi-entity search (WP56)")
+async def search_v2(
+    db: AsyncSession = Depends(get_db),
+    q: str = Query(..., description="Search query. Empty string returns empty arms."),
+    entity: str = Query(
+        "all",
+        description=(
+            "Entity scope: all | problems | tickets | components | labels | users "
+            "| share_posts | bounties (singular aliases share_post / bounty accepted)"
+        ),
+    ),
+    mode: Literal["v2", "typeahead"] = Query(
+        "v2",
+        description=(
+            "A-FR-002: 'v2' = standard multi-entity search (default, unchanged). "
+            "'typeahead' = arms capped at 5, ranking pipeline with recency/personalisation "
+            "boosts applied, response includes 'combined' merged list (≤ 15 items)."
+        ),
+    ),
+    problem_status: str | None = Query(None, description="Filter problems by status"),
+    problem_category_id: uuid.UUID | None = Query(None, description="Filter problems by category UUID"),
+    ticket_status: str | None = Query(None, description="Filter tickets by status"),
+    ticket_project_id: uuid.UUID | None = Query(None, description="Filter tickets by project UUID"),
+    component_project_id: uuid.UUID | None = Query(None, description="Filter components by project UUID"),
+    limit: int = Query(20, ge=1, le=100, description="Max items per arm"),
+    offset: int = Query(0, ge=0, description="Pagination offset (applied to each arm independently)"),
+    cursor: str | None = Query(
+        None,
+        description="WP62: single-arm cursor. When set with entity=<arm>, paginates that arm.",
+    ),
+    problems_cursor: str | None = Query(None, description="WP62: cursor for problems arm (entity=all)"),
+    tickets_cursor: str | None = Query(None, description="WP62: cursor for tickets arm (entity=all)"),
+    components_cursor: str | None = Query(None, description="WP62: cursor for components arm (entity=all)"),
+    labels_cursor: str | None = Query(None, description="WP62: cursor for labels arm (entity=all)"),
+    users_cursor: str | None = Query(None, description="WP62: cursor for users arm (entity=all)"),
+    share_posts_cursor: str | None = Query(None, description="v2.29-S6: cursor for share_posts arm (entity=all)"),
+    bounties_cursor: str | None = Query(None, description="v2.29-S6: cursor for bounties arm (entity=all)"),
+    refresh_total: bool = Query(
+        False,
+        description=(
+            "v2.11-WP14: when true, force a live re-count on the current page "
+            "instead of honouring the WP10 cursor-pinned snapshot total. The "
+            "response arm's ``total_authority`` will read 'live'."
+        ),
+    ),
+    current_user_id: uuid.UUID | None = Query(
+        None,
+        description=(
+            "A-FR-005: optional caller UUID for personalisation boost (+0.2 when "
+            "current user is assignee/reporter). Used in mode=typeahead only."
+        ),
+    ),
+):
+    """Multi-entity search across Problems, Tickets, Components, Labels, and Users.
+
+    Returns one envelope per requested entity arm: ``{arm: {items: [...], total: int}}``.
+    When ``entity=all`` (default), all five arms are returned; when ``entity=<x>``, only
+    the ``<x>`` arm is returned.
+
+    Empty ``q`` is allowed and immediately returns arms with ``items=[]`` and ``total=0``
+    without hitting the database.
+    """
+    if entity not in _ENTITY_VALUES:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Invalid entity {entity!r}. "
+                f"Must be one of: {sorted(_ENTITY_VALUES)}"
+            ),
+        )
+
+    # v2.29-S6: normalise singular aliases (share_post → share_posts, …) so
+    # downstream cursor routing and the response envelope use the arm key.
+    entity = _ENTITY_ALIASES.get(entity, entity)
+
+    # A-FR-002: typeahead mode — route to dedicated ranking pipeline
+    if mode == "typeahead":
+        import asyncio
+
+        from opentelemetry import trace as _otel_trace
+
+        _tracer = _otel_trace.get_tracer("app.routes.search")
+
+        with _tracer.start_as_current_span("search.typeahead") as _span:
+            _span.set_attribute("q.length", len(q))
+            _span.set_attribute("entity", entity or "all")
+
+            try:
+                ta_result, dm_item = await asyncio.gather(
+                    search_typeahead(
+                        db,
+                        q,
+                        entity=entity,
+                        current_user_id=current_user_id,
+                    ),
+                    resolve_direct_match(db, q),
+                )
+            except InvalidCursorError as exc:
+                raise HTTPException(status_code=400, detail=f"invalid cursor: {exc}") from exc
+
+            direct_match = SearchItem(**dm_item) if dm_item is not None else None
+            combined = [SearchItem(**item) for item in ta_result["combined"]]
+            arms = {
+                arm: SearchArm(**data)
+                for arm, data in ta_result.items()
+                if arm != "combined"
+            }
+
+            # arms_hit: number of arms that returned at least one item
+            arms_hit = sum(
+                1 for arm_data in arms.values() if arm_data.items
+            )
+            _span.set_attribute("arms_hit", arms_hit)
+
+            return SearchV2Response(
+                direct_match=direct_match,
+                combined=combined if combined else None,
+                **arms,
+            )
+
+    # WP62: single-arm `cursor` is shorthand for the matching `<arm>_cursor`.
+    # Reject ambiguous combinations (e.g. cursor= with entity=all) up front.
+    arm_cursors = {
+        "problems": problems_cursor,
+        "tickets": tickets_cursor,
+        "components": components_cursor,
+        "labels": labels_cursor,
+        "users": users_cursor,
+        "share_posts": share_posts_cursor,
+        "bounties": bounties_cursor,
+    }
+    if cursor is not None:
+        if entity == "all":
+            raise HTTPException(
+                status_code=400,
+                detail="cursor= is only valid with entity=<arm>; use <arm>_cursor= for entity=all",
+            )
+        if arm_cursors[entity] is not None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"cursor= and {entity}_cursor= are mutually exclusive",
+            )
+        arm_cursors[entity] = cursor
+
+    import asyncio
+
+    try:
+        raw, dm_item = await asyncio.gather(
+            search_entities(
+                db,
+                q,
+                entity=entity,
+                problem_status=problem_status,
+                problem_category_id=problem_category_id,
+                ticket_status=ticket_status,
+                ticket_project_id=ticket_project_id,
+                component_project_id=component_project_id,
+                limit=limit,
+                offset=offset,
+                problems_cursor=arm_cursors["problems"],
+                tickets_cursor=arm_cursors["tickets"],
+                components_cursor=arm_cursors["components"],
+                labels_cursor=arm_cursors["labels"],
+                users_cursor=arm_cursors["users"],
+                share_posts_cursor=arm_cursors["share_posts"],
+                bounties_cursor=arm_cursors["bounties"],
+                refresh_total=refresh_total,
+            ),
+            resolve_direct_match(db, q),
+        )
+    except InvalidCursorError as exc:
+        raise HTTPException(status_code=400, detail=f"invalid cursor: {exc}") from exc
+
+    # Build the response model from the raw dict returned by the service.
+    # Only arms present in `raw` are set; the rest remain None.
+    direct_match = SearchItem(**dm_item) if dm_item is not None else None
+    return SearchV2Response(
+        direct_match=direct_match,
+        **{arm: SearchArm(**data) for arm, data in raw.items()},
+    )
+
+
+@router.get("", deprecated=True)
 async def search(
+    request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     q: str = Query("", description="Search query string"),
     sort: str = Query("relevance", description="Sort mode: relevance | upvotes | newest"),
@@ -28,7 +354,23 @@ async def search(
     limit: int = Query(20, ge=1, le=100, description="Max results to return"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
 ):
-    """Full-text search across problems, solutions, and comments (REQ-350..REQ-360)."""
+    """Full-text search across problems, solutions, and comments (REQ-350..REQ-360).
+
+    **DEPRECATED (v2.11-WP13).** Use ``GET /api/search/v2`` instead. This
+    endpoint emits ``Deprecation: true`` and ``Sunset: <RFC1123>`` headers
+    per RFC 8594 and logs a WARN-level hit counter so straggling callers
+    surface in monitoring. It will be removed after the monitoring
+    window (sunset date in :data:`V1_SEARCH_SUNSET_RFC1123`).
+    """
+    # RFC 8594 deprecation signalling.
+    response.headers["Deprecation"] = "true"
+    response.headers["Sunset"] = V1_SEARCH_SUNSET_RFC1123
+
+    # Hit-count instrumentation — WARN level so it shows up in default
+    # production log scraping. ``v1_search.hit`` is the grep tag.
+    caller = _resolve_v1_caller(request)
+    logger.warning("v1_search.hit caller=%s q_len=%d", caller, len(q or ""))
+
     return await search_problems(
         db,
         q,

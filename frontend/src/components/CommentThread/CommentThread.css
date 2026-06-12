@@ -1,0 +1,103 @@
+/* v7a — nested comment hierarchy for tickets (problem-style). */
+
+.comment-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.comment-thread__empty {
+  color: var(--color-text-secondary);
+  font-style: italic;
+  padding: 0.5rem 0;
+}
+
+.comment-thread__node {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.comment-thread__bubble {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 0.5rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.comment-thread__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+}
+
+.comment-thread__author {
+  font-family: ui-monospace, monospace;
+}
+
+.comment-thread__when {
+  margin-left: auto;
+  opacity: 0.8;
+}
+
+.comment-thread__body {
+  white-space: pre-wrap;
+  font-size: 0.875rem;
+  color: var(--color-text);
+  line-height: 1.45;
+}
+
+.comment-thread__actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.comment-thread__reply-btn,
+.comment-thread__post-btn {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  color: var(--color-text);
+}
+
+.comment-thread__post-btn {
+  background: var(--gradient-primary);
+  color: #1A1207;
+  border-color: transparent;
+  font-weight: 600;
+}
+
+.comment-thread__reply-btn:hover:not(:disabled) {
+  background: var(--color-bg);
+}
+
+.comment-thread__reply-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-top: 0.4rem;
+  border-top: 1px dashed var(--color-border);
+}
+
+.comment-thread__error {
+  font-size: 0.75rem;
+  color: var(--color-error);
+}
+
+/* Child indent rail — depth-capped so very deep threads don't overflow. */
+.comment-thread__children {
+  margin-left: 1rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}

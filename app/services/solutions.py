@@ -98,18 +98,18 @@ async def create_version(
     usr_uuid = uuid.UUID(user_id)
 
     # Load solution
-    result = await db.execute(select(Solution).where(Solution.id == sol_uuid))
-    solution = result.scalar_one_or_none()
+    sol_result = await db.execute(select(Solution).where(Solution.id == sol_uuid))
+    solution = sol_result.scalar_one_or_none()
     if solution is None:
         raise ValueError("Solution not found")
 
     # Compute next version number
-    result = await db.execute(
+    max_result = await db.execute(
         select(func.coalesce(func.max(SolutionVersion.version_number), 0)).where(
             SolutionVersion.solution_id == sol_uuid
         )
     )
-    next_number = result.scalar_one() + 1
+    next_number = max_result.scalar_one() + 1
 
     version = SolutionVersion(
         solution_id=sol_uuid,
@@ -158,18 +158,18 @@ async def update_solution_status(
     sol_uuid = uuid.UUID(solution_id)
     actor_uuid = uuid.UUID(actor_id)
 
-    result = await db.execute(select(Solution).where(Solution.id == sol_uuid))
-    solution = result.scalar_one_or_none()
+    sol_result = await db.execute(select(Solution).where(Solution.id == sol_uuid))
+    solution = sol_result.scalar_one_or_none()
     if solution is None:
         raise ValueError("Solution not found")
 
-    result = await db.execute(select(Problem).where(Problem.id == solution.problem_id))
-    problem = result.scalar_one_or_none()
+    prob_result = await db.execute(select(Problem).where(Problem.id == solution.problem_id))
+    problem = prob_result.scalar_one_or_none()
     if problem is None:
         raise ValueError("Problem not found")
 
-    result = await db.execute(select(User).where(User.id == actor_uuid))
-    actor = result.scalar_one_or_none()
+    actor_result = await db.execute(select(User).where(User.id == actor_uuid))
+    actor = actor_result.scalar_one_or_none()
     if actor is None:
         raise ValueError("Actor not found")
 
@@ -182,13 +182,13 @@ async def update_solution_status(
 
     # If accepting, unaccept any previously accepted solution
     if new_status == "accepted":
-        result = await db.execute(
+        unaccept_result = await db.execute(
             select(Solution).where(
                 Solution.problem_id == solution.problem_id,
                 Solution.status == "accepted",
             )
         )
-        for prev in result.scalars().all():
+        for prev in unaccept_result.scalars().all():
             prev.status = "pending"
 
     solution.status = new_status
@@ -257,8 +257,8 @@ async def list_solutions(
     prob_uuid = uuid.UUID(problem_id)
 
     # Verify problem exists
-    result = await db.execute(select(Problem).where(Problem.id == prob_uuid))
-    if result.scalar_one_or_none() is None:
+    prob_result = await db.execute(select(Problem).where(Problem.id == prob_uuid))
+    if prob_result.scalar_one_or_none() is None:
         raise ValueError("Problem not found")
 
     stmt = (
@@ -316,16 +316,16 @@ async def list_versions(
     sol_uuid = uuid.UUID(solution_id)
 
     # Verify solution exists
-    result = await db.execute(select(Solution).where(Solution.id == sol_uuid))
-    if result.scalar_one_or_none() is None:
+    sol_result = await db.execute(select(Solution).where(Solution.id == sol_uuid))
+    if sol_result.scalar_one_or_none() is None:
         raise ValueError("Solution not found")
 
-    result = await db.execute(
+    version_result = await db.execute(
         select(SolutionVersion)
         .where(SolutionVersion.solution_id == sol_uuid)
         .order_by(SolutionVersion.version_number.asc())
     )
-    versions = result.scalars().all()
+    versions = version_result.scalars().all()
 
     return [
         {
@@ -355,14 +355,14 @@ async def delete_solution(
     sol_uuid = uuid.UUID(solution_id)
     actor_uuid = uuid.UUID(actor_id)
 
-    result = await db.execute(select(Solution).where(Solution.id == sol_uuid))
-    solution = result.scalar_one_or_none()
+    sol_result = await db.execute(select(Solution).where(Solution.id == sol_uuid))
+    solution = sol_result.scalar_one_or_none()
     if solution is None:
         raise ValueError("Solution not found")
 
     # Load actor
-    result = await db.execute(select(User).where(User.id == actor_uuid))
-    actor = result.scalar_one_or_none()
+    actor_result = await db.execute(select(User).where(User.id == actor_uuid))
+    actor = actor_result.scalar_one_or_none()
     if actor is None:
         raise ValueError("Actor not found")
 

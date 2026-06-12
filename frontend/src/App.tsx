@@ -1,8 +1,9 @@
-import React, { Suspense, lazy } from "react";
+import { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "./theme";
 import { ToastProvider } from "./contexts/ToastContext";
 import { MainLayout } from "./layouts/MainLayout";
+import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
 
 const Landing = lazy(() => import("./pages/Landing"));
 const Problems = lazy(() => import("./pages/Feed"));
@@ -17,7 +18,19 @@ const AdminCategories = lazy(() => import("./pages/admin/Categories"));
 const AdminTags = lazy(() => import("./pages/admin/Tags"));
 const AdminUsers = lazy(() => import("./pages/admin/Users"));
 const AdminModeration = lazy(() => import("./pages/admin/Moderation"));
+const KanbanBoardPage = lazy(() => import("./pages/Kanban"));
+const CreateTicket = lazy(() => import("./pages/CreateTicket/CreateTicket"));
+const ActivityPage = lazy(() => import("./pages/Activity"));
+const TicketDetail = lazy(() => import("./pages/TicketDetail"));
+const ComponentDetail = lazy(() => import("./pages/ComponentDetail"));
+const LabelDetail = lazy(() => import("./pages/LabelDetail"));
+const UserDetail = lazy(() => import("./pages/UserDetail"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const ProjectHierarchyPage = lazy(() => import("./pages/ProjectHierarchy"));
+const ProjectsPage = lazy(() => import("./pages/Projects"));
+const MeSpacePage = lazy(() => import("./pages/MeSpace"));
+const SharePage = lazy(() => import("./pages/Share"));
+const BountiesPage = lazy(() => import("./pages/Bounties"));
 
 function AppFallback() {
   return (
@@ -29,11 +42,15 @@ function AppFallback() {
 
 export default function App() {
   return (
-    <BrowserRouter basename={import.meta.env.BASE_URL}>
+    <BrowserRouter
+      basename={import.meta.env.BASE_URL}
+      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+    >
       <ThemeProvider>
         <ToastProvider>
         <MainLayout>
           <Suspense fallback={<AppFallback />}>
+            <RouteErrorBoundary>
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/problems" element={<Problems />} />
@@ -48,8 +65,24 @@ export default function App() {
               <Route path="/admin/tags" element={<AdminTags />} />
               <Route path="/admin/users" element={<AdminUsers />} />
               <Route path="/admin/moderation" element={<AdminModeration />} />
+              <Route path="/board" element={<KanbanBoardPage />} />
+              <Route path="/activity" element={<ActivityPage />} />
+              <Route path="/me" element={<MeSpacePage />} />
+              <Route path="/share" element={<SharePage />} />
+              <Route path="/bounties" element={<BountiesPage />} />
+              <Route path="/tickets/new" element={<CreateTicket />} />
+              <Route path="/tickets/:displayId" element={<TicketDetail />} />
+              <Route path="/components/:id" element={<ComponentDetail />} />
+              <Route path="/labels/:name" element={<LabelDetail />} />
+              <Route path="/users/:handle" element={<UserDetail />} />
+              <Route path="/projects" element={<ProjectsPage />} />
+              <Route
+                path="/projects/:projectId/hierarchy"
+                element={<ProjectHierarchyPage />}
+              />
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </RouteErrorBoundary>
           </Suspense>
         </MainLayout>
         </ToastProvider>

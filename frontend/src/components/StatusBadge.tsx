@@ -1,4 +1,3 @@
-import React from "react";
 
 export type ProblemStatus = "open" | "claimed" | "solved" | "accepted" | "duplicate";
 

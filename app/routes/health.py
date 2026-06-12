@@ -58,6 +58,20 @@ async def _check_storage() -> dict[str, Any]:
         return {"status": "fail", "error": str(exc)}
 
 
+@router.get("/api/health")
+async def api_health() -> dict[str, str]:
+    """Frontend-probe alias for /healthz — returns minimal JSON.
+
+    The mock-mode detector in frontend/src/mock/api.ts pings this path
+    and decides to fall back to mock data unless it receives a 200
+    application/json response. Without this alias, /api/health would
+    fall through to the SPA catch-all and return text/html, flipping
+    the whole UI into mock mode and replacing real backend data with
+    `[]` for every unmapped endpoint.
+    """
+    return {"status": "ok"}
+
+
 @router.get("/healthz")
 async def healthz(response: Response) -> dict[str, Any]:
     """Liveness / readiness probe.

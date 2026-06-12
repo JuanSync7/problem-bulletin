@@ -1,7 +1,15 @@
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AdminRouteGuard } from "../../components/AdminRouteGuard";
 import { useToast } from "../../contexts/ToastContext";
+import { parseApiError } from "../../api/errors";
 import "./Admin.css";
+
+// v2.14-WP04: throw with backend's parsed envelope message.
+async function throwParsed(res: Response, fallback: string): Promise<never> {
+  const body = await res.json().catch(() => null);
+  const parsed = parseApiError(res, body);
+  throw new Error(parsed.message || fallback);
+}
 
 interface AdminUser {
   id: string;
@@ -23,11 +31,14 @@ function UsersContent() {
       const res = await fetch(`/api/admin/users${params}`, {
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to fetch users");
+      if (!res.ok) await throwParsed(res, "Failed to fetch users");
       const data: AdminUser[] = await res.json();
       setUsers(data);
-    } catch {
-      toast.show("Failed to load users", "error");
+    } catch (err) {
+      toast.show(
+        err instanceof Error ? err.message : "Failed to load users",
+        "error",
+      );
     } finally {
       setLoading(false);
     }
@@ -45,11 +56,14 @@ function UsersContent() {
         credentials: "include",
         body: JSON.stringify({ role: newRole }),
       });
-      if (!res.ok) throw new Error("Failed to update role");
+      if (!res.ok) await throwParsed(res, "Failed to update role");
       toast.show("User role updated", "success");
       await fetchUsers();
-    } catch {
-      toast.show("Failed to update role", "error");
+    } catch (err) {
+      toast.show(
+        err instanceof Error ? err.message : "Failed to update role",
+        "error",
+      );
     }
   }
 
@@ -62,11 +76,14 @@ function UsersContent() {
         credentials: "include",
         body: JSON.stringify({ status: newStatus }),
       });
-      if (!res.ok) throw new Error("Failed to update status");
+      if (!res.ok) await throwParsed(res, "Failed to update status");
       toast.show(`User ${newStatus === "active" ? "activated" : "deactivated"}`, "success");
       await fetchUsers();
-    } catch {
-      toast.show("Failed to update status", "error");
+    } catch (err) {
+      toast.show(
+        err instanceof Error ? err.message : "Failed to update status",
+        "error",
+      );
     }
   }
 

@@ -41,6 +41,10 @@ from app.services.delivery import (
     is_milestone,
 )
 from app.enums import WatchLevel, NotificationType
+from app.models.notification import Notification
+from app.models.watch import Watch
+from tests.helpers.seed_agent_account import seed_user
+from tests.helpers.seed_problem import seed_problem
 
 
 # ---------------------------------------------------------------------------
@@ -87,32 +91,60 @@ def _db_result(rows):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_set_watch_new_row_inserts(mock_db):
+async def test_set_watch_new_row_inserts(db):
     """set_watch with no prior row inserts a new Watch via ON CONFLICT DO UPDATE."""
-    uid = uuid.uuid4()
-    pid = uuid.uuid4()
-    expected_watch = _make_watch(user_id=uid, problem_id=pid, level=WatchLevel.solutions_only)
-    mock_db.execute.return_value = _db_result([expected_watch])
+    uid = await seed_user(db)
+    pid = await seed_problem(db)
 
-    result = await set_watch(mock_db, user_id=uid, problem_id=pid, level=WatchLevel.solutions_only)
+    result = await set_watch(db, user_id=str(uid), problem_id=str(pid), level=WatchLevel.solutions_only)
 
-    mock_db.execute.assert_called()
     assert result is not None
+    assert result.user_id == uid
+    assert result.problem_id == pid
+    assert result.level == WatchLevel.solutions_only.value
 
 
 @pytest.mark.asyncio
-async def test_set_watch_updates_existing_row(mock_db):
+async def test_set_watch_updates_existing_row(db):
     """Calling set_watch twice on the same (user_id, problem_id) upserts to new level."""
-    uid = uuid.uuid4()
-    pid = uuid.uuid4()
-    mock_db.execute.return_value = _db_result([_make_watch(user_id=uid, problem_id=pid, level=WatchLevel.all_activity)])
+    uid = await seed_user(db)
+    pid = await seed_problem(db)
 
-    # First call
-    await set_watch(mock_db, user_id=uid, problem_id=pid, level=WatchLevel.solutions_only)
+    # First call — solutions_only
+    first = await set_watch(db, user_id=str(uid), problem_id=str(pid), level=WatchLevel.solutions_only)
     # Second call — upgrades level
-    result = await set_watch(mock_db, user_id=uid, problem_id=pid, level=WatchLevel.all_activity)
+    second = await set_watch(db, user_id=str(uid), problem_id=str(pid), level=WatchLevel.all_activity)
 
-    assert mock_db.execute.call_count >= 2
+    assert first.id == second.id  # same row (upsert)
+    # Re-read from DB to bypass the SQLAlchemy identity-map cache.
+    await db.refresh(second)
+    assert second.level == WatchLevel.all_activity.value
+
+
+@pytest.mark.asyncio
+async def test_set_watch_second_call_returns_fresh_level_without_manual_refresh(db):
+    """Regression for v2.11-WP04 A6.
+
+    The SQLAlchemy identity map used to hand back the row in its
+    pre-upsert state on the second call.  After WP04 the service runs
+    ``await db.refresh(watch)`` internally, so the returned object's
+    ``.level`` reflects the post-write value without the caller having
+    to refresh manually.
+    """
+    uid = await seed_user(db)
+    pid = await seed_problem(db)
+
+    first = await set_watch(
+        db, user_id=str(uid), problem_id=str(pid), level=WatchLevel.status_only
+    )
+    assert first.level == WatchLevel.status_only.value
+
+    second = await set_watch(
+        db, user_id=str(uid), problem_id=str(pid), level=WatchLevel.all_activity
+    )
+
+    # No manual ``db.refresh`` — the service must return the fresh level.
+    assert second.level == WatchLevel.all_activity.value
 
 
 # ---------------------------------------------------------------------------
@@ -120,31 +152,24 @@ async def test_set_watch_updates_existing_row(mock_db):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_remove_watch_existing_row_returns_true(mock_db):
+async def test_remove_watch_existing_row_returns_true(db):
     """remove_watch returns True when the row exists and is deleted."""
-    uid = uuid.uuid4()
-    pid = uuid.uuid4()
-    # Simulate rowcount=1 (one row deleted)
-    result_mock = MagicMock()
-    result_mock.rowcount = 1
-    mock_db.execute.return_value = result_mock
+    uid = await seed_user(db)
+    pid = await seed_problem(db)
+    await set_watch(db, user_id=str(uid), problem_id=str(pid), level=WatchLevel.all_activity)
 
-    result = await remove_watch(mock_db, user_id=uid, problem_id=pid)
+    result = await remove_watch(db, user_id=str(uid), problem_id=str(pid))
 
     assert result is True
 
 
 @pytest.mark.asyncio
-async def test_remove_watch_missing_row_returns_false(mock_db):
+async def test_remove_watch_missing_row_returns_false(db):
     """remove_watch returns False when no matching row exists."""
-    uid = uuid.uuid4()
-    pid = uuid.uuid4()
-    # Simulate rowcount=0 (no row deleted)
-    result_mock = MagicMock()
-    result_mock.rowcount = 0
-    mock_db.execute.return_value = result_mock
+    uid = await seed_user(db)
+    pid = await seed_problem(db)
 
-    result = await remove_watch(mock_db, user_id=uid, problem_id=pid)
+    result = await remove_watch(db, user_id=str(uid), problem_id=str(pid))
 
     assert result is False
 
@@ -154,20 +179,17 @@ async def test_remove_watch_missing_row_returns_false(mock_db):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_auto_watch_no_prior_watch_sets_watch(mock_db):
-    """auto_watch with no existing row calls set_watch."""
-    uid = uuid.uuid4()
-    pid = uuid.uuid4()
-    # get_watch returns None → no existing watch
-    mock_db.execute.return_value = _db_result([])
+async def test_auto_watch_no_prior_watch_sets_watch(db):
+    """auto_watch with no existing row creates one at the requested level."""
+    uid = await seed_user(db)
+    pid = await seed_problem(db)
 
-    with patch("app.services.watches.set_watch", new_callable=AsyncMock) as mock_set:
-        new_watch = _make_watch(user_id=uid, problem_id=pid, level=WatchLevel.all_activity)
-        mock_set.return_value = new_watch
+    result = await auto_watch(db, user_id=str(uid), problem_id=str(pid), level=WatchLevel.all_activity)
 
-        result = await auto_watch(mock_db, user_id=uid, problem_id=pid, level=WatchLevel.all_activity)
-
-    mock_set.assert_called_once()
+    assert result is not None
+    assert result.user_id == uid
+    assert result.problem_id == pid
+    assert result.level == WatchLevel.all_activity.value
 
 
 @pytest.mark.asyncio
@@ -223,200 +245,178 @@ async def test_auto_watch_equal_level_no_op(mock_db):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_generate_notification_creates_rows_for_watchers(mock_db):
+async def test_generate_notification_creates_rows_for_watchers(db):
     """generate_notification inserts Notification rows for qualifying watchers."""
-    problem_id = uuid.uuid4()
-    actor_id = uuid.uuid4()
-    watcher_id = uuid.uuid4()
-    watcher_row = _make_watcher_row(user_id=watcher_id, level=WatchLevel.all_activity)
-    mock_db.execute.return_value = _db_result([watcher_row])
+    pid = await seed_problem(db)
+    actor_id = await seed_user(db)
+    watcher_id = await seed_user(db)
+    await set_watch(db, user_id=str(watcher_id), problem_id=str(pid), level=WatchLevel.all_activity)
 
     notifications = await generate_notification(
-        mock_db,
+        db,
         event_type=NotificationType.comment_posted,
-        problem_id=problem_id,
-        actor_id=actor_id,
+        problem_id=str(pid),
+        actor_id=str(actor_id),
     )
 
-    mock_db.add_all.assert_called_once()
-    mock_db.flush.assert_called_once()
     assert isinstance(notifications, list)
-    assert len(notifications) >= 1
+    assert len(notifications) == 1
+    assert notifications[0].recipient_id == watcher_id
+    assert notifications[0].type == NotificationType.comment_posted.value
 
 
 @pytest.mark.asyncio
-async def test_generate_notification_excludes_actor(mock_db):
+async def test_generate_notification_excludes_actor(db):
     """Actor must not receive a notification for their own action."""
-    problem_id = uuid.uuid4()
-    actor_id = uuid.uuid4()
-    # Only watcher is the actor — must be excluded
-    watcher_row = _make_watcher_row(user_id=actor_id, level=WatchLevel.all_activity)
-    mock_db.execute.return_value = _db_result([watcher_row])
+    pid = await seed_problem(db)
+    actor_id = await seed_user(db)
+    # Only watcher is the actor — must be excluded by the WHERE user_id != :actor
+    await set_watch(db, user_id=str(actor_id), problem_id=str(pid), level=WatchLevel.all_activity)
 
     notifications = await generate_notification(
-        mock_db,
+        db,
         event_type=NotificationType.comment_posted,
-        problem_id=problem_id,
-        actor_id=actor_id,
+        problem_id=str(pid),
+        actor_id=str(actor_id),
     )
 
-    # Actor is excluded at query level; result is empty
     assert notifications == []
 
 
 @pytest.mark.asyncio
-async def test_generate_notification_empty_watcher_list_returns_empty(mock_db):
-    """When no watchers exist, generate_notification returns [] and calls add_all([])."""
-    mock_db.execute.return_value = _db_result([])
+async def test_generate_notification_empty_watcher_list_returns_empty(db):
+    """When no watchers exist, generate_notification returns []."""
+    pid = await seed_problem(db)
+    actor_id = await seed_user(db)
 
     notifications = await generate_notification(
-        mock_db,
+        db,
         event_type=NotificationType.comment_posted,
-        problem_id=uuid.uuid4(),
-        actor_id=uuid.uuid4(),
+        problem_id=str(pid),
+        actor_id=str(actor_id),
     )
 
     assert notifications == []
-    mock_db.add_all.assert_called_once_with([])
 
 
 # ---------------------------------------------------------------------------
 # generate_notification — WATCH_ROUTING filtering
 # ---------------------------------------------------------------------------
 
+async def _seed_watcher(db, pid, level):
+    uid = await seed_user(db)
+    await set_watch(db, user_id=str(uid), problem_id=str(pid), level=level)
+    return uid
+
+
 @pytest.mark.asyncio
-async def test_routing_all_activity_receives_any_type(mock_db):
+async def test_routing_all_activity_receives_any_type(db):
     """all_activity level receives every notification type."""
-    problem_id = uuid.uuid4()
-    actor_id = uuid.uuid4()
-    watcher_id = uuid.uuid4()
-    watcher_row = _make_watcher_row(user_id=watcher_id, level=WatchLevel.all_activity)
-    mock_db.execute.return_value = _db_result([watcher_row])
+    pid = await seed_problem(db)
+    actor_id = await seed_user(db)
+    await _seed_watcher(db, pid, WatchLevel.all_activity)
 
     notifications = await generate_notification(
-        mock_db,
+        db,
         event_type=NotificationType.comment_posted,
-        problem_id=problem_id,
-        actor_id=actor_id,
+        problem_id=str(pid),
+        actor_id=str(actor_id),
     )
 
-    assert len(notifications) >= 1
+    assert len(notifications) == 1
 
 
 @pytest.mark.asyncio
-async def test_routing_solutions_only_receives_solution_posted(mock_db):
+async def test_routing_solutions_only_receives_solution_posted(db):
     """solutions_only watcher receives solution_posted events."""
-    problem_id = uuid.uuid4()
-    actor_id = uuid.uuid4()
-    watcher_id = uuid.uuid4()
-    watcher_row = _make_watcher_row(user_id=watcher_id, level=WatchLevel.solutions_only)
-    mock_db.execute.return_value = _db_result([watcher_row])
+    pid = await seed_problem(db)
+    actor_id = await seed_user(db)
+    await _seed_watcher(db, pid, WatchLevel.solutions_only)
 
     notifications = await generate_notification(
-        mock_db,
+        db,
         event_type=NotificationType.solution_posted,
-        problem_id=problem_id,
-        actor_id=actor_id,
+        problem_id=str(pid),
+        actor_id=str(actor_id),
     )
 
-    assert len(notifications) >= 1
+    assert len(notifications) == 1
 
 
 @pytest.mark.asyncio
-async def test_routing_solutions_only_receives_solution_accepted(mock_db):
+async def test_routing_solutions_only_receives_solution_accepted(db):
     """solutions_only watcher receives solution_accepted events."""
-    problem_id = uuid.uuid4()
-    actor_id = uuid.uuid4()
-    watcher_id = uuid.uuid4()
-    watcher_row = _make_watcher_row(user_id=watcher_id, level=WatchLevel.solutions_only)
-    mock_db.execute.return_value = _db_result([watcher_row])
+    pid = await seed_problem(db)
+    actor_id = await seed_user(db)
+    await _seed_watcher(db, pid, WatchLevel.solutions_only)
 
     notifications = await generate_notification(
-        mock_db,
+        db,
         event_type=NotificationType.solution_accepted,
-        problem_id=problem_id,
-        actor_id=actor_id,
+        problem_id=str(pid),
+        actor_id=str(actor_id),
     )
 
-    assert len(notifications) >= 1
+    assert len(notifications) == 1
 
 
 @pytest.mark.asyncio
-async def test_routing_solutions_only_blocked_from_comment_posted(mock_db):
-    """solutions_only watcher must NOT receive comment_posted events.
-
-    GAP: Phase 0 says solutions_only → {solution_posted, solution_accepted}.
-    If WATCH_ROUTING in the implementation differs, update this assertion.
-    """
-    problem_id = uuid.uuid4()
-    actor_id = uuid.uuid4()
-    watcher_id = uuid.uuid4()
-    watcher_row = _make_watcher_row(user_id=watcher_id, level=WatchLevel.solutions_only)
-    mock_db.execute.return_value = _db_result([watcher_row])
+async def test_routing_solutions_only_blocked_from_comment_posted(db):
+    """solutions_only watcher must NOT receive comment_posted events."""
+    pid = await seed_problem(db)
+    actor_id = await seed_user(db)
+    await _seed_watcher(db, pid, WatchLevel.solutions_only)
 
     notifications = await generate_notification(
-        mock_db,
+        db,
         event_type=NotificationType.comment_posted,
-        problem_id=problem_id,
-        actor_id=actor_id,
+        problem_id=str(pid),
+        actor_id=str(actor_id),
     )
 
     assert notifications == []
 
 
 @pytest.mark.asyncio
-async def test_routing_status_only_receives_status_changed(mock_db):
+async def test_routing_status_only_receives_status_changed(db):
     """status_only watcher receives status_changed events."""
-    problem_id = uuid.uuid4()
-    actor_id = uuid.uuid4()
-    watcher_id = uuid.uuid4()
-    watcher_row = _make_watcher_row(user_id=watcher_id, level=WatchLevel.status_only)
-    mock_db.execute.return_value = _db_result([watcher_row])
+    pid = await seed_problem(db)
+    actor_id = await seed_user(db)
+    await _seed_watcher(db, pid, WatchLevel.status_only)
 
     notifications = await generate_notification(
-        mock_db,
+        db,
         event_type=NotificationType.status_changed,
-        problem_id=problem_id,
-        actor_id=actor_id,
+        problem_id=str(pid),
+        actor_id=str(actor_id),
     )
 
-    assert len(notifications) >= 1
+    assert len(notifications) == 1
 
 
 @pytest.mark.asyncio
-async def test_routing_status_only_blocked_from_solution_posted(mock_db):
-    """status_only watcher must NOT receive solution_posted events.
-
-    GAP: Phase 0 says status_only → {status_changed} only.
-    """
-    problem_id = uuid.uuid4()
-    actor_id = uuid.uuid4()
-    watcher_id = uuid.uuid4()
-    watcher_row = _make_watcher_row(user_id=watcher_id, level=WatchLevel.status_only)
-    mock_db.execute.return_value = _db_result([watcher_row])
+async def test_routing_status_only_blocked_from_solution_posted(db):
+    """status_only watcher must NOT receive solution_posted events."""
+    pid = await seed_problem(db)
+    actor_id = await seed_user(db)
+    await _seed_watcher(db, pid, WatchLevel.status_only)
 
     notifications = await generate_notification(
-        mock_db,
+        db,
         event_type=NotificationType.solution_posted,
-        problem_id=problem_id,
-        actor_id=actor_id,
+        problem_id=str(pid),
+        actor_id=str(actor_id),
     )
 
     assert notifications == []
 
 
 @pytest.mark.asyncio
-async def test_routing_none_blocks_all_types(mock_db):
-    """none level must block every notification type.
-
-    GAP: Verify none does not accidentally inherit status_only routing via
-    an off-by-one in the routing table lookup.
-    """
-    problem_id = uuid.uuid4()
-    actor_id = uuid.uuid4()
-    watcher_id = uuid.uuid4()
-    watcher_row = _make_watcher_row(user_id=watcher_id, level=WatchLevel.none)
-    mock_db.execute.return_value = _db_result([watcher_row])
+async def test_routing_none_blocks_all_types(db):
+    """none level must block every notification type."""
+    pid = await seed_problem(db)
+    actor_id = await seed_user(db)
+    await _seed_watcher(db, pid, WatchLevel.none)
 
     for event_type in [
         NotificationType.comment_posted,
@@ -424,31 +424,29 @@ async def test_routing_none_blocks_all_types(mock_db):
         NotificationType.solution_accepted,
         NotificationType.status_changed,
     ]:
-        mock_db.execute.return_value = _db_result([watcher_row])
         notifications = await generate_notification(
-            mock_db,
+            db,
             event_type=event_type,
-            problem_id=problem_id,
-            actor_id=actor_id,
+            problem_id=str(pid),
+            actor_id=str(actor_id),
         )
         assert notifications == [], f"none level must block {event_type}"
 
 
 @pytest.mark.asyncio
-async def test_routing_mixed_watcher_levels(mock_db):
+async def test_routing_mixed_watcher_levels(db):
     """Three watchers (all_activity, solutions_only, none); event=solution_posted → 2 notifications."""
-    problem_id = uuid.uuid4()
-    actor_id = uuid.uuid4()
-    w_all = _make_watcher_row(user_id=uuid.uuid4(), level=WatchLevel.all_activity)
-    w_sol = _make_watcher_row(user_id=uuid.uuid4(), level=WatchLevel.solutions_only)
-    w_none = _make_watcher_row(user_id=uuid.uuid4(), level=WatchLevel.none)
-    mock_db.execute.return_value = _db_result([w_all, w_sol, w_none])
+    pid = await seed_problem(db)
+    actor_id = await seed_user(db)
+    await _seed_watcher(db, pid, WatchLevel.all_activity)
+    await _seed_watcher(db, pid, WatchLevel.solutions_only)
+    await _seed_watcher(db, pid, WatchLevel.none)
 
     notifications = await generate_notification(
-        mock_db,
+        db,
         event_type=NotificationType.solution_posted,
-        problem_id=problem_id,
-        actor_id=actor_id,
+        problem_id=str(pid),
+        actor_id=str(actor_id),
     )
 
     # all_activity and solutions_only should receive; none should not
@@ -460,9 +458,25 @@ async def test_routing_mixed_watcher_levels(mock_db):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_push_ws_notification_broadcasts_to_active_connection():
-    """push_ws_notification calls broadcast_to_user for a connected recipient."""
-    notification = _make_notification()
+async def test_push_ws_notification_broadcasts_to_active_connection(db):
+    """push_ws_notification calls broadcast_to_user for a connected recipient.
+
+    Uses a real Notification row (live DB) and mocks only the WebSocket
+    connection_manager at its boundary.
+    """
+    pid = await seed_problem(db)
+    actor_id = await seed_user(db)
+    watcher_id = await seed_user(db)
+    await set_watch(db, user_id=str(watcher_id), problem_id=str(pid), level=WatchLevel.all_activity)
+
+    notifications = await generate_notification(
+        db,
+        event_type=NotificationType.comment_posted,
+        problem_id=str(pid),
+        actor_id=str(actor_id),
+    )
+    assert len(notifications) == 1
+    notification = notifications[0]
 
     mock_manager = AsyncMock()
     mock_manager.broadcast_to_user = AsyncMock()
@@ -472,8 +486,8 @@ async def test_push_ws_notification_broadcasts_to_active_connection():
 
     mock_manager.broadcast_to_user.assert_called_once()
     call_args = mock_manager.broadcast_to_user.call_args
-    # Verify the notification's recipient_id was passed
-    assert notification.recipient_id in call_args.args or notification.recipient_id in call_args.kwargs.values()
+    # First positional arg is the recipient id as a string
+    assert call_args.args[0] == str(notification.recipient_id)
 
 
 @pytest.mark.asyncio
@@ -507,14 +521,42 @@ async def test_push_ws_notification_swallows_broadcast_exceptions():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_send_teams_webhook_fires_and_forgets(mock_teams_webhook):
-    """send_teams_webhook calls httpx.AsyncClient.post with Adaptive Card payload."""
-    notification = _make_notification()
+async def test_send_teams_webhook_fires_and_forgets(db):
+    """send_teams_webhook calls httpx.AsyncClient.post with Adaptive Card payload.
 
-    with patch("app.services.delivery.httpx.AsyncClient", return_value=mock_teams_webhook):
-        await send_teams_webhook(notification)
+    Uses a real Notification row (live DB) and mocks only the httpx client.
+    The TEAMS_WEBHOOK_URL setting is forced to a non-empty value.
+    """
+    pid = await seed_problem(db)
+    actor_id = await seed_user(db)
+    watcher_id = await seed_user(db)
+    await set_watch(db, user_id=str(watcher_id), problem_id=str(pid), level=WatchLevel.all_activity)
+    notifications = await generate_notification(
+        db,
+        event_type=NotificationType.comment_posted,
+        problem_id=str(pid),
+        actor_id=str(actor_id),
+    )
+    notification = notifications[0]
+    # created_at is server-default; populate via flush+refresh
+    await db.flush()
+    await db.refresh(notification)
 
-    mock_teams_webhook.post.assert_called_once()
+    mock_client = AsyncMock()
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_client.post = AsyncMock(return_value=mock_resp)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("app.services.delivery.httpx.AsyncClient", return_value=mock_client):
+        with patch("app.services.delivery.get_settings") as mock_settings:
+            settings = MagicMock()
+            settings.TEAMS_WEBHOOK_URL = "https://example.invalid/webhook"
+            mock_settings.return_value = settings
+            await send_teams_webhook(notification)
+
+    mock_client.post.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -542,7 +584,7 @@ async def test_send_teams_webhook_no_op_when_url_unconfigured():
     with patch("app.services.delivery.httpx.AsyncClient") as mock_cls:
         with patch("app.services.delivery.get_settings") as mock_settings:
             settings = MagicMock()
-            settings.teams_webhook_url = None
+            settings.TEAMS_WEBHOOK_URL = None  # production reads the uppercase attribute
             mock_settings.return_value = settings
 
             await send_teams_webhook(notification)
@@ -554,74 +596,92 @@ async def test_send_teams_webhook_no_op_when_url_unconfigured():
 # send_email_digest
 # ---------------------------------------------------------------------------
 
+async def _build_real_notification(db, *, pid, actor_id, watcher_id) -> Notification:
+    """Helper: insert one Notification row via generate_notification and refresh."""
+    await set_watch(db, user_id=str(watcher_id), problem_id=str(pid), level=WatchLevel.all_activity)
+    rows = await generate_notification(
+        db,
+        event_type=NotificationType.comment_posted,
+        problem_id=str(pid),
+        actor_id=str(actor_id),
+    )
+    await db.flush()
+    await db.refresh(rows[0])
+    return rows[0]
+
+
 @pytest.mark.asyncio
-async def test_send_email_digest_calls_aiosmtplib(mock_db, mock_smtp):
-    """send_email_digest calls aiosmtplib.send and stamps updated_at."""
-    uid = uuid.uuid4()
-    notifications = [_make_notification(recipient_id=uid) for _ in range(3)]
+async def test_send_email_digest_calls_aiosmtplib(db):
+    """send_email_digest calls aiosmtplib.send and stamps updated_at.
 
-    # Simulate db.get returning a User with an email address
-    mock_user = MagicMock()
-    mock_user.id = uid
-    mock_user.email = "user@example.com"
-    mock_user.display_name = "Test User"
-    mock_db.get.return_value = mock_user
+    Real User and Notification rows; SMTP mocked at the aiosmtplib boundary.
+    """
+    pid = await seed_problem(db)
+    actor_id = await seed_user(db)
+    watcher_id = await seed_user(db, email="user@example.com")
+    notifications = [
+        await _build_real_notification(db, pid=pid, actor_id=actor_id, watcher_id=watcher_id)
+    ]
 
-    await send_email_digest(mock_db, user_id=uid, notifications=notifications)
+    with patch("aiosmtplib.send", new_callable=AsyncMock) as mock_smtp:
+        await send_email_digest(db, user_id=str(watcher_id), notifications=notifications)
 
     mock_smtp.assert_called_once()
-    # updated_at should be stamped on each notification
     for n in notifications:
         assert n.updated_at is not None
 
 
 @pytest.mark.asyncio
-async def test_send_email_digest_stamps_updated_at(mock_db, mock_smtp):
+async def test_send_email_digest_stamps_updated_at(db):
     """updated_at is set on each notification after a successful digest send."""
-    uid = uuid.uuid4()
-    n = _make_notification(recipient_id=uid)
-    n.updated_at = None
+    pid = await seed_problem(db)
+    actor_id = await seed_user(db)
+    watcher_id = await seed_user(db, email="alice@example.com")
+    notification = await _build_real_notification(
+        db, pid=pid, actor_id=actor_id, watcher_id=watcher_id
+    )
+    assert notification.updated_at is None
 
-    mock_user = MagicMock()
-    mock_user.id = uid
-    mock_user.email = "user@example.com"
-    mock_user.display_name = "Test User"
-    mock_db.get.return_value = mock_user
+    with patch("aiosmtplib.send", new_callable=AsyncMock):
+        await send_email_digest(db, user_id=str(watcher_id), notifications=[notification])
 
-    await send_email_digest(mock_db, user_id=uid, notifications=[n])
-
-    assert n.updated_at is not None
-    mock_db.flush.assert_called()
+    assert notification.updated_at is not None
 
 
 @pytest.mark.asyncio
-async def test_send_email_digest_silent_on_smtp_failure(mock_db):
+async def test_send_email_digest_silent_on_smtp_failure(db):
     """send_email_digest catches SMTP failures and does NOT stamp updated_at."""
-    uid = uuid.uuid4()
-    n = _make_notification(recipient_id=uid)
-    n.updated_at = None
-
-    mock_user = MagicMock()
-    mock_user.id = uid
-    mock_user.email = "user@example.com"
-    mock_user.display_name = "Test User"
-    mock_db.get.return_value = mock_user
+    pid = await seed_problem(db)
+    actor_id = await seed_user(db)
+    watcher_id = await seed_user(db, email="bob@example.com")
+    notification = await _build_real_notification(
+        db, pid=pid, actor_id=actor_id, watcher_id=watcher_id
+    )
+    assert notification.updated_at is None
 
     with patch("aiosmtplib.send", new_callable=AsyncMock, side_effect=Exception("SMTP error")):
         # Must not raise
-        await send_email_digest(mock_db, user_id=uid, notifications=[n])
+        await send_email_digest(db, user_id=str(watcher_id), notifications=[notification])
 
     # updated_at must NOT be stamped on failure
-    assert n.updated_at is None
+    assert notification.updated_at is None
 
 
 @pytest.mark.asyncio
-async def test_send_email_digest_no_smtp_call_for_unknown_user(mock_db):
+async def test_send_email_digest_no_smtp_call_for_unknown_user(db):
     """When user_id does not match any User row, SMTP is not called and no exception raised."""
-    mock_db.get.return_value = None  # user not found
+    pid = await seed_problem(db)
+    actor_id = await seed_user(db)
+    watcher_id = await seed_user(db)
+    # Build a real notification row so the early-return guard (empty list)
+    # doesn't pre-empt the user lookup branch.
+    notification = await _build_real_notification(
+        db, pid=pid, actor_id=actor_id, watcher_id=watcher_id
+    )
 
+    unknown_user_id = uuid.uuid4()
     with patch("aiosmtplib.send", new_callable=AsyncMock) as mock_smtp:
-        await send_email_digest(mock_db, user_id=uuid.uuid4(), notifications=[_make_notification()])
+        await send_email_digest(db, user_id=str(unknown_user_id), notifications=[notification])
 
     mock_smtp.assert_not_called()
 

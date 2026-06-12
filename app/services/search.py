@@ -99,6 +99,9 @@ async def search_problems(
         params["category_id"] = str(category_id)
 
     if status is not None:
+        # v2.11-WP15 (Bucket E2): column was briefly named ``legacy_status``
+        # between ``a1_agent_kanban`` and ``a19_problems_status_rename``;
+        # since a19 it is just ``status`` again, matching the ORM attribute.
         where_clauses.append("p.status = :status")
         params["status"] = status
 

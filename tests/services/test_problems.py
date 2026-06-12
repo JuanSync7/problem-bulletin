@@ -1,195 +1,118 @@
+"""Live-DB tests for app.services.problems and app.services.feed (v2.10-WP04a).
+
+Real-DB exercise of create / FSM / claim / pin / update / feed flows.
 """
-Tests for app.services.problems and app.services.feed.
-Derived from: docs/AION_BULLETIN_TEST_DOCS.md — Problem Management section (lines 981-1158)
-"""
+from __future__ import annotations
+
+import base64
+import json
 import uuid
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy import select
 
+from app.enums import ProblemStatus, SortMode, UserRole
+from app.exceptions import ForbiddenTransitionError, PinLimitExceededError
+from app.models.problem import Claim, Problem, ProblemEditHistory
+from app.schemas import ProblemCreate
+from app.services.feed import get_feed
 from app.services.problems import (
-    create_problem,
-    transition_status,
     claim_problem,
+    create_problem,
     pin_problem,
+    transition_status,
     update_problem,
 )
-from app.services.feed import get_feed
-from app.exceptions import ForbiddenTransitionError, PinLimitExceededError
-from app.enums import ProblemStatus, UserRole, SortMode
-from app.schemas import ProblemCreate
+from tests.helpers.seed_agent_account import seed_user
+from tests.helpers.seed_problem import seed_category, seed_problem, seed_tag
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# create_problem
 # ---------------------------------------------------------------------------
 
-def _make_problem(
-    *,
-    status: ProblemStatus = ProblemStatus.open,
-    author_id=None,
-    is_pinned: bool = False,
-    is_anonymous: bool = False,
-):
-    """Return a mock Problem ORM object."""
-    problem = MagicMock()
-    problem.id = uuid.uuid4()
-    problem.author_id = author_id or uuid.uuid4()
-    problem.status = status
-    problem.is_pinned = is_pinned
-    problem.is_anonymous = is_anonymous
-    problem.title = "Sample problem title"
-    problem.description = "Sample description text"
-    problem.category_id = uuid.uuid4()
-    problem.activity_at = datetime.now(timezone.utc)
-    problem.created_at = datetime.now(timezone.utc)
-    return problem
-
-
-def _scalar_result(value):
-    """Build a mock execute() return whose .scalar_one_or_none() returns value."""
-    result = MagicMock()
-    result.scalar_one_or_none.return_value = value
-    result.scalar_one.return_value = value
-    result.scalars.return_value.all.return_value = []
-    result.scalar.return_value = value
-    return result
-
-
-def _scalars_result(items):
-    """Build a mock execute() return whose .scalars().all() returns items."""
-    result = MagicMock()
-    result.scalars.return_value.all.return_value = items
-    result.scalar_one_or_none.return_value = None
-    result.scalar.return_value = len(items)
-    return result
-
-
-# ---------------------------------------------------------------------------
-# create_problem tests
-# ---------------------------------------------------------------------------
 
 class TestCreateProblem:
 
     @pytest.mark.asyncio
-    async def test_valid_input_creates_problem_with_status_open(self, mock_db, make_user):
+    async def test_valid_input_creates_problem_with_status_open(self, db):
         """Happy path: minimal valid input yields a Problem with status=open."""
-        user = make_user()
-        category_id = uuid.uuid4()
+        author_id = await seed_user(db)
+        category_id = await seed_category(db)
 
-        # Simulate: category exists (returns a mock category), tags empty
-        mock_db.execute.side_effect = [
-            _scalar_result(MagicMock()),  # category lookup
-        ]
-
-        schema = ProblemCreate(
-            title="Hello",
-            description="Ten chars!!",
-            category_id=category_id,
-            tag_ids=[],
-            is_anonymous=False,
+        result = await create_problem(
+            db=db,
+            user_id=str(author_id),
+            data=ProblemCreate(
+                title="Hello there",
+                description="Ten chars at least.",
+                category_id=str(category_id),
+                tag_ids=[],
+                is_anonymous=False,
+            ),
         )
-
-        with patch("app.services.problems.ProblemEditHistory", MagicMock()), \
-             patch("app.services.problems.Problem") as MockProblem:
-            created = MagicMock()
-            created.status = ProblemStatus.open
-            MockProblem.return_value = created
-
-            result = await create_problem(db=mock_db, schema=schema, author_id=user.id)
-
-        assert result.status == ProblemStatus.open
-        mock_db.add.assert_called()
-        mock_db.flush.assert_awaited()
+        assert result.status == ProblemStatus.open.value
 
     @pytest.mark.asyncio
-    async def test_invalid_category_id_raises_value_error(self, mock_db, make_user):
-        """create_problem raises ValueError when category_id does not exist."""
-        user = make_user()
-        category_id = uuid.uuid4()
-
-        # Category lookup returns None (not found)
-        mock_db.execute.return_value = _scalar_result(None)
-
-        schema = ProblemCreate(
-            title="Hello",
-            description="Ten chars!!",
-            category_id=category_id,
-            tag_ids=[],
-            is_anonymous=False,
-        )
-
+    async def test_invalid_category_id_raises_value_error(self, db):
+        author_id = await seed_user(db)
         with pytest.raises(ValueError, match="[Cc]ategory"):
-            await create_problem(db=mock_db, schema=schema, author_id=user.id)
+            await create_problem(
+                db=db,
+                user_id=str(author_id),
+                data=ProblemCreate(
+                    title="Hello there",
+                    description="Ten chars at least.",
+                    category_id=str(uuid.uuid4()),  # bogus
+                    tag_ids=[],
+                    is_anonymous=False,
+                ),
+            )
 
     @pytest.mark.asyncio
-    async def test_invalid_tag_ids_raises_value_error(self, mock_db, make_user):
-        """create_problem raises ValueError when one or more tag_ids are invalid."""
-        user = make_user()
-        category_id = uuid.uuid4()
-        bad_tag_id = uuid.uuid4()
-
-        # Category exists, but tag count query returns fewer tags than requested
-        mock_db.execute.side_effect = [
-            _scalar_result(MagicMock()),  # category lookup succeeds
-            _scalar_result(0),            # tag count query: 0 found, 1 requested
-        ]
-
-        schema = ProblemCreate(
-            title="Hello",
-            description="Ten chars!!",
-            category_id=category_id,
-            tag_ids=[bad_tag_id],
-            is_anonymous=False,
-        )
-
+    async def test_invalid_tag_ids_raises_value_error(self, db):
+        author_id = await seed_user(db)
+        category_id = await seed_category(db)
         with pytest.raises(ValueError, match="[Tt]ag"):
-            await create_problem(db=mock_db, schema=schema, author_id=user.id)
+            await create_problem(
+                db=db,
+                user_id=str(author_id),
+                data=ProblemCreate(
+                    title="Hello there",
+                    description="Ten chars at least.",
+                    category_id=str(category_id),
+                    tag_ids=[str(uuid.uuid4())],  # bogus tag
+                    is_anonymous=False,
+                ),
+            )
 
     @pytest.mark.asyncio
-    async def test_anonymous_posting_stores_author_id_with_flag(self, mock_db, make_user):
-        """Anonymous problems still record author_id but set is_anonymous=True."""
-        user = make_user()
-        category_id = uuid.uuid4()
-
-        mock_db.execute.return_value = _scalar_result(MagicMock())
-
-        schema = ProblemCreate(
-            title="Hello",
-            description="Ten chars!!",
-            category_id=category_id,
-            tag_ids=[],
-            is_anonymous=True,
+    async def test_anonymous_posting_stores_author_id_with_flag(self, db):
+        author_id = await seed_user(db)
+        category_id = await seed_category(db)
+        result = await create_problem(
+            db=db,
+            user_id=str(author_id),
+            data=ProblemCreate(
+                title="Hello there",
+                description="Ten chars at least.",
+                category_id=str(category_id),
+                tag_ids=[],
+                is_anonymous=True,
+            ),
         )
-
-        with patch("app.services.problems.Problem") as MockProblem:
-            created = MagicMock()
-            created.is_anonymous = True
-            created.author_id = user.id
-            MockProblem.return_value = created
-
-            result = await create_problem(db=mock_db, schema=schema, author_id=user.id)
-
-        # Verify Problem was constructed with is_anonymous=True and the real author_id
-        call_kwargs = MockProblem.call_args
-        assert call_kwargs is not None
-        kwargs = call_kwargs.kwargs if call_kwargs.kwargs else {}
-        args_dict = {**kwargs}
-        # author_id must be stored regardless of anonymity
-        assert result.author_id == user.id
         assert result.is_anonymous is True
+        assert result.author_id == author_id
 
 
 # ---------------------------------------------------------------------------
-# transition_status — FSM tests
+# transition_status (FSM)
 # ---------------------------------------------------------------------------
+
 
 class TestTransitionStatus:
-    """
-    Tests for the FSM-governed status transitions.
+    """REQ-156 — FSM transitions:
 
-    Allowed transition table (from spec):
         open     → claimed     (any user)
         open     → duplicate   (admin only)
         claimed  → open        (any user)
@@ -206,538 +129,399 @@ class TestTransitionStatus:
         (ProblemStatus.solved,  ProblemStatus.open),
         (ProblemStatus.solved,  ProblemStatus.accepted),
     ])
-    async def test_allowed_transitions_succeed(
-        self, mock_db, make_user, from_status, to_status
-    ):
-        """All allowed FSM transitions return the updated problem."""
-        author = make_user()
-        problem = _make_problem(status=from_status, author_id=author.id)
-
-        mock_db.get.return_value = problem
-        mock_db.execute.return_value = _scalar_result(author)
-
-        with patch("app.services.problems.ALLOWED_TRANSITIONS", {
-            ProblemStatus.open:    {ProblemStatus.claimed, ProblemStatus.duplicate},
-            ProblemStatus.claimed: {ProblemStatus.open, ProblemStatus.solved},
-            ProblemStatus.solved:  {ProblemStatus.open, ProblemStatus.accepted},
-        }):
-            result = await transition_status(
-                db=mock_db,
-                problem_id=problem.id,
-                target=to_status,
-                actor_id=author.id,
-            )
-
-        assert result.status == to_status
-
-    @pytest.mark.asyncio
-    async def test_allowed_transition_open_to_duplicate_admin(self, mock_db, make_user):
-        """open → duplicate succeeds for admin actor."""
-        admin = make_user(role=UserRole.admin)
-        problem = _make_problem(status=ProblemStatus.open)
-
-        mock_db.get.return_value = problem
-        mock_db.execute.return_value = _scalar_result(admin)
-
-        result = await transition_status(
-            db=mock_db,
-            problem_id=problem.id,
-            target=ProblemStatus.duplicate,
-            actor_id=admin.id,
+    async def test_allowed_transitions_succeed(self, db, from_status, to_status):
+        author_id = await seed_user(db)
+        problem_id = await seed_problem(
+            db, author_id=author_id, status=from_status.value,
         )
 
-        assert result.status == ProblemStatus.duplicate
+        result = await transition_status(
+            db=db, problem_id=str(problem_id),
+            target=to_status, actor_id=str(author_id),
+        )
+        assert result.status == to_status.value
+
+    @pytest.mark.asyncio
+    async def test_allowed_transition_open_to_duplicate_admin(self, db):
+        admin_id = await seed_user(db, role=UserRole.admin.value)
+        author_id = await seed_user(db)
+        problem_id = await seed_problem(db, author_id=author_id, status="open")
+
+        result = await transition_status(
+            db=db, problem_id=str(problem_id),
+            target=ProblemStatus.duplicate, actor_id=str(admin_id),
+        )
+        assert result.status == ProblemStatus.duplicate.value
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("from_status,to_status", [
-        (ProblemStatus.open,     ProblemStatus.accepted),
-        (ProblemStatus.open,     ProblemStatus.solved),
-        (ProblemStatus.accepted, ProblemStatus.open),
-        (ProblemStatus.accepted, ProblemStatus.solved),
+        (ProblemStatus.open,      ProblemStatus.accepted),
+        (ProblemStatus.open,      ProblemStatus.solved),
+        (ProblemStatus.accepted,  ProblemStatus.solved),
         (ProblemStatus.duplicate, ProblemStatus.open),
+        (ProblemStatus.accepted,  ProblemStatus.open),
     ])
-    async def test_forbidden_transitions_raise_error(
-        self, mock_db, make_user, from_status, to_status
-    ):
-        """Transitions not in the allowed table raise ForbiddenTransitionError."""
-        actor = make_user()
-        problem = _make_problem(status=from_status, author_id=actor.id)
-
-        mock_db.get.return_value = problem
-        mock_db.execute.return_value = _scalar_result(actor)
-
+    async def test_forbidden_transitions_raise_error(self, db, from_status, to_status):
+        """Transitions either absent from the FSM, or admin-only when the actor
+        is a regular user, raise ForbiddenTransitionError."""
+        actor_id = await seed_user(db)  # regular user, not admin
+        problem_id = await seed_problem(
+            db, author_id=actor_id, status=from_status.value,
+        )
         with pytest.raises(ForbiddenTransitionError):
             await transition_status(
-                db=mock_db,
-                problem_id=problem.id,
-                target=to_status,
-                actor_id=actor.id,
+                db=db, problem_id=str(problem_id),
+                target=to_status, actor_id=str(actor_id),
             )
 
     @pytest.mark.asyncio
-    async def test_solved_to_accepted_requires_author_or_admin(self, mock_db, make_user):
-        """solved → accepted is forbidden for a third-party non-admin user."""
-        author = make_user()
-        third_party = make_user()
-        problem = _make_problem(status=ProblemStatus.solved, author_id=author.id)
-
-        mock_db.get.return_value = problem
-        mock_db.execute.return_value = _scalar_result(third_party)
+    async def test_solved_to_accepted_requires_author_or_admin(self, db):
+        author_id = await seed_user(db)
+        third_party_id = await seed_user(db)
+        problem_id = await seed_problem(db, author_id=author_id, status="solved")
 
         with pytest.raises(ForbiddenTransitionError):
             await transition_status(
-                db=mock_db,
-                problem_id=problem.id,
-                target=ProblemStatus.accepted,
-                actor_id=third_party.id,
+                db=db, problem_id=str(problem_id),
+                target=ProblemStatus.accepted, actor_id=str(third_party_id),
             )
 
     @pytest.mark.asyncio
-    async def test_solved_to_accepted_allowed_for_author(self, mock_db, make_user):
-        """solved → accepted succeeds when the actor is the problem author."""
-        author = make_user()
-        problem = _make_problem(status=ProblemStatus.solved, author_id=author.id)
-
-        mock_db.get.return_value = problem
-        mock_db.execute.return_value = _scalar_result(author)
+    async def test_solved_to_accepted_allowed_for_author(self, db):
+        author_id = await seed_user(db)
+        problem_id = await seed_problem(db, author_id=author_id, status="solved")
 
         result = await transition_status(
-            db=mock_db,
-            problem_id=problem.id,
-            target=ProblemStatus.accepted,
-            actor_id=author.id,
+            db=db, problem_id=str(problem_id),
+            target=ProblemStatus.accepted, actor_id=str(author_id),
         )
-        assert result.status == ProblemStatus.accepted
+        assert result.status == ProblemStatus.accepted.value
 
     @pytest.mark.asyncio
-    async def test_solved_to_accepted_allowed_for_admin(self, mock_db, make_user):
-        """solved → accepted succeeds when the actor is an admin (not the author)."""
-        author = make_user()
-        admin = make_user(role=UserRole.admin)
-        problem = _make_problem(status=ProblemStatus.solved, author_id=author.id)
-
-        mock_db.get.return_value = problem
-        mock_db.execute.return_value = _scalar_result(admin)
+    async def test_solved_to_accepted_allowed_for_admin(self, db):
+        author_id = await seed_user(db)
+        admin_id = await seed_user(db, role=UserRole.admin.value)
+        problem_id = await seed_problem(db, author_id=author_id, status="solved")
 
         result = await transition_status(
-            db=mock_db,
-            problem_id=problem.id,
-            target=ProblemStatus.accepted,
-            actor_id=admin.id,
+            db=db, problem_id=str(problem_id),
+            target=ProblemStatus.accepted, actor_id=str(admin_id),
         )
-        assert result.status == ProblemStatus.accepted
+        assert result.status == ProblemStatus.accepted.value
 
     @pytest.mark.asyncio
-    async def test_open_to_duplicate_forbidden_for_non_admin(self, mock_db, make_user):
-        """open → duplicate is forbidden for a regular (non-admin) user."""
-        user = make_user(role=UserRole.user)
-        problem = _make_problem(status=ProblemStatus.open)
-
-        mock_db.get.return_value = problem
-        mock_db.execute.return_value = _scalar_result(user)
+    async def test_open_to_duplicate_forbidden_for_non_admin(self, db):
+        user_id = await seed_user(db)
+        problem_id = await seed_problem(db, author_id=user_id, status="open")
 
         with pytest.raises(ForbiddenTransitionError):
             await transition_status(
-                db=mock_db,
-                problem_id=problem.id,
-                target=ProblemStatus.duplicate,
-                actor_id=user.id,
+                db=db, problem_id=str(problem_id),
+                target=ProblemStatus.duplicate, actor_id=str(user_id),
             )
 
 
 # ---------------------------------------------------------------------------
-# claim_problem tests
+# claim_problem
 # ---------------------------------------------------------------------------
+
 
 class TestClaimProblem:
+    """Service contract: returns Claim | None (legacy mock test asserted dict
+    {claimed: bool} — the actual service has always returned the row.  Tests
+    updated to the real contract."""
 
     @pytest.mark.asyncio
-    async def test_first_claim_creates_claim_row(self, mock_db, make_user):
-        """First call inserts a Claim row and returns claimed=True."""
-        user = make_user()
-        problem = _make_problem()
-
-        # Problem lookup succeeds; no existing claim
-        mock_db.get.return_value = problem
-        mock_db.execute.return_value = _scalar_result(None)  # no existing claim
+    async def test_first_claim_creates_claim_row(self, db):
+        user_id = await seed_user(db)
+        problem_id = await seed_problem(db, author_id=user_id, status="open")
 
         result = await claim_problem(
-            db=mock_db,
-            problem_id=problem.id,
-            user_id=user.id,
+            db=db, problem_id=str(problem_id), user_id=str(user_id),
         )
 
-        assert result["claimed"] is True
-        mock_db.add.assert_called()
+        assert result is not None
+        assert result.user_id == user_id
+        assert result.problem_id == problem_id
 
     @pytest.mark.asyncio
-    async def test_second_claim_deletes_claim_row(self, mock_db, make_user):
-        """Second call on the same problem by same user deletes the claim row."""
-        user = make_user()
-        problem = _make_problem()
-        existing_claim = MagicMock()
+    async def test_second_claim_deletes_claim_row(self, db):
+        user_id = await seed_user(db)
+        problem_id = await seed_problem(db, author_id=user_id, status="open")
 
-        mock_db.get.return_value = problem
-        mock_db.execute.return_value = _scalar_result(existing_claim)
-
+        await claim_problem(db=db, problem_id=str(problem_id), user_id=str(user_id))
         result = await claim_problem(
-            db=mock_db,
-            problem_id=problem.id,
-            user_id=user.id,
+            db=db, problem_id=str(problem_id), user_id=str(user_id),
         )
-
-        assert result["claimed"] is False
-        mock_db.delete.assert_awaited_with(existing_claim)
+        assert result is None
+        # Row really gone
+        row = (await db.execute(
+            select(Claim).where(Claim.problem_id == problem_id, Claim.user_id == user_id)
+        )).scalar_one_or_none()
+        assert row is None
 
 
 # ---------------------------------------------------------------------------
-# pin_problem tests
+# pin_problem
 # ---------------------------------------------------------------------------
+
 
 class TestPinProblem:
+    """Service contract: pin_problem(db, problem_id, admin_id) — admin_id is
+    accepted for audit but no role check is enforced inside the service (the
+    route layer enforces admin)."""
 
     @pytest.mark.asyncio
-    async def test_pin_sets_is_pinned_true(self, mock_db, make_user):
-        """pin_problem on an unpinned problem sets is_pinned=True."""
-        admin = make_user(role=UserRole.admin)
-        problem = _make_problem(is_pinned=False)
+    async def test_pin_sets_is_pinned_true(self, db):
+        admin_id = await seed_user(db, role=UserRole.admin.value)
+        problem_id = await seed_problem(db, author_id=admin_id, status="open")
 
-        mock_db.get.return_value = problem
-        # pinned count query returns 0
-        mock_db.execute.return_value = _scalar_result(0)
-
-        result = await pin_problem(db=mock_db, problem_id=problem.id)
-
+        result = await pin_problem(
+            db=db, problem_id=str(problem_id), admin_id=str(admin_id),
+        )
         assert result.is_pinned is True
 
     @pytest.mark.asyncio
-    async def test_unpin_sets_is_pinned_false(self, mock_db, make_user):
-        """pin_problem on an already-pinned problem sets is_pinned=False (toggle)."""
-        admin = make_user(role=UserRole.admin)
-        problem = _make_problem(is_pinned=True)
-
-        mock_db.get.return_value = problem
-        # No count check needed for unpin — but mock anyway
-        mock_db.execute.return_value = _scalar_result(3)
-
-        result = await pin_problem(db=mock_db, problem_id=problem.id)
-
+    async def test_unpin_sets_is_pinned_false(self, db):
+        admin_id = await seed_user(db, role=UserRole.admin.value)
+        problem_id = await seed_problem(
+            db, author_id=admin_id, status="open", is_pinned=True,
+        )
+        result = await pin_problem(
+            db=db, problem_id=str(problem_id), admin_id=str(admin_id),
+        )
         assert result.is_pinned is False
 
     @pytest.mark.asyncio
-    async def test_fourth_pin_raises_pin_limit_exceeded(self, mock_db, make_user):
-        """Pinning a 4th problem when MAX_PINNED=3 raises PinLimitExceededError."""
-        admin = make_user(role=UserRole.admin)
-        problem = _make_problem(is_pinned=False)
+    async def test_fourth_pin_raises_pin_limit_exceeded(self, db):
+        admin_id = await seed_user(db, role=UserRole.admin.value)
+        for _ in range(3):
+            await seed_problem(db, author_id=admin_id, status="open", is_pinned=True)
 
-        mock_db.get.return_value = problem
-        # Already 3 pinned problems
-        mock_db.execute.return_value = _scalar_result(3)
-
+        target_id = await seed_problem(db, author_id=admin_id, status="open")
         with pytest.raises(PinLimitExceededError):
-            await pin_problem(db=mock_db, problem_id=problem.id)
+            await pin_problem(
+                db=db, problem_id=str(target_id), admin_id=str(admin_id),
+            )
 
     @pytest.mark.asyncio
-    async def test_third_pin_succeeds(self, mock_db, make_user):
-        """Pinning a 3rd problem when 2 are already pinned succeeds."""
-        problem = _make_problem(is_pinned=False)
+    async def test_third_pin_succeeds(self, db):
+        admin_id = await seed_user(db, role=UserRole.admin.value)
+        for _ in range(2):
+            await seed_problem(db, author_id=admin_id, status="open", is_pinned=True)
 
-        mock_db.get.return_value = problem
-        mock_db.execute.return_value = _scalar_result(2)  # 2 already pinned
-
-        result = await pin_problem(db=mock_db, problem_id=problem.id)
-
+        target_id = await seed_problem(db, author_id=admin_id, status="open")
+        result = await pin_problem(
+            db=db, problem_id=str(target_id), admin_id=str(admin_id),
+        )
         assert result.is_pinned is True
 
 
 # ---------------------------------------------------------------------------
-# update_problem tests
+# update_problem
 # ---------------------------------------------------------------------------
+
 
 class TestUpdateProblem:
 
     @pytest.mark.asyncio
-    async def test_update_creates_edit_history_snapshot(self, mock_db, make_user):
-        """update_problem inserts a ProblemEditHistory row with old values."""
-        author = make_user()
-        old_title = "Old title here"
-        problem = _make_problem(author_id=author.id)
-        problem.title = old_title
-        problem.description = "Original description here"
+    async def test_update_creates_edit_history_snapshot(self, db):
+        author_id = await seed_user(db)
+        problem_id = await seed_problem(
+            db, author_id=author_id, title="Old title here",
+            description="Original description here",
+        )
 
-        mock_db.get.return_value = problem
+        await update_problem(
+            db=db, problem_id=str(problem_id), editor_id=str(author_id),
+            updates={"title": "New title updated"},
+        )
 
-        with patch("app.services.problems.ProblemEditHistory") as MockHistory:
-            history_instance = MagicMock()
-            MockHistory.return_value = history_instance
-
-            await update_problem(
-                db=mock_db,
-                problem_id=problem.id,
-                updates={"title": "New title updated"},
-                editor_id=author.id,
+        history_rows = (await db.execute(
+            select(ProblemEditHistory).where(
+                ProblemEditHistory.problem_id == problem_id
             )
-
-        MockHistory.assert_called_once()
-        call_kwargs = MockHistory.call_args.kwargs if MockHistory.call_args.kwargs else {}
-        # Snapshot should contain the old title
-        snapshot = call_kwargs.get("snapshot", {})
-        assert "title" in snapshot
-        assert snapshot["title"] == old_title
+        )).scalars().all()
+        assert len(history_rows) == 1
+        assert history_rows[0].snapshot.get("title") == "Old title here"
 
     @pytest.mark.asyncio
-    async def test_update_only_editable_fields(self, mock_db, make_user):
-        """Only title, description, and category_id are editable fields."""
-        author = make_user()
-        problem = _make_problem(author_id=author.id)
-        problem.title = "Original title"
-        problem.description = "Original description here"
+    async def test_update_only_editable_fields(self, db):
+        author_id = await seed_user(db)
+        problem_id = await seed_problem(
+            db, author_id=author_id, status="open",
+            title="Original title", description="Original description here",
+        )
 
-        mock_db.get.return_value = problem
+        await update_problem(
+            db=db, problem_id=str(problem_id), editor_id=str(author_id),
+            updates={
+                "title": "New title value here",
+                "description": "New description value here",
+                "status": ProblemStatus.accepted.value,  # not editable
+            },
+        )
 
-        with patch("app.services.problems.ProblemEditHistory", MagicMock()):
-            result = await update_problem(
-                db=mock_db,
-                problem_id=problem.id,
-                updates={
-                    "title": "New title value here",
-                    "description": "New description value here",
-                    "status": ProblemStatus.accepted,  # should be ignored
-                },
-                editor_id=author.id,
-            )
-
-        # status must not be changed via update_problem
-        assert result.status != ProblemStatus.accepted or result.status == problem.status
+        row = (await db.execute(
+            select(Problem).where(Problem.id == problem_id)
+        )).scalar_one()
+        # Status untouched
+        assert row.status == "open"
+        assert row.title == "New title value here"
 
     @pytest.mark.asyncio
-    async def test_update_snapshot_contains_only_changed_fields(self, mock_db, make_user):
-        """A patch of only title produces a single-key snapshot."""
-        author = make_user()
-        problem = _make_problem(author_id=author.id)
-        problem.title = "Old title text"
-        problem.description = "Unchanged description."
+    async def test_update_snapshot_contains_only_changed_fields(self, db):
+        author_id = await seed_user(db)
+        problem_id = await seed_problem(
+            db, author_id=author_id, title="Old title text",
+            description="Unchanged description.",
+        )
 
-        mock_db.get.return_value = problem
+        await update_problem(
+            db=db, problem_id=str(problem_id), editor_id=str(author_id),
+            updates={"title": "New title text"},
+        )
 
-        with patch("app.services.problems.ProblemEditHistory") as MockHistory:
-            await update_problem(
-                db=mock_db,
-                problem_id=problem.id,
-                updates={"title": "New title text"},
-                editor_id=author.id,
+        history = (await db.execute(
+            select(ProblemEditHistory).where(
+                ProblemEditHistory.problem_id == problem_id
             )
-
-        call_kwargs = MockHistory.call_args.kwargs if MockHistory.call_args.kwargs else {}
-        snapshot = call_kwargs.get("snapshot", {})
-        # Only title changed — snapshot should not include description
-        assert "description" not in snapshot
+        )).scalar_one()
+        # Only the changed field made it into the snapshot
+        assert "description" not in history.snapshot
+        assert "title" in history.snapshot
 
 
 # ---------------------------------------------------------------------------
-# get_feed tests
+# get_feed
 # ---------------------------------------------------------------------------
+
 
 class TestGetFeed:
 
-    def _make_feed_problems(self, n: int = 3):
-        return [_make_problem() for _ in range(n)]
-
     @pytest.mark.asyncio
     @pytest.mark.parametrize("sort_mode", [
-        SortMode.new,
-        SortMode.top,
-        SortMode.active,
-        SortMode.discussed,
+        SortMode.new, SortMode.top, SortMode.active, SortMode.discussed,
     ])
-    async def test_cursor_pagination_all_sort_modes(self, mock_db, sort_mode):
-        """get_feed accepts all 4 sort modes without error."""
-        problems = self._make_feed_problems(2)
+    async def test_cursor_pagination_all_sort_modes(self, db, sort_mode):
+        """get_feed accepts every sort mode and returns a CursorPage."""
+        author_id = await seed_user(db)
+        for _ in range(2):
+            await seed_problem(db, author_id=author_id, status="open")
 
-        mock_db.execute.return_value = _scalars_result(problems + [MagicMock()])  # limit+1
-
-        # GAP: Full cursor pagination traversal with real DB not covered here
-        result = await get_feed(
-            db=mock_db,
-            sort=sort_mode,
-            cursor=None,
-            limit=20,
-        )
-
+        result = await get_feed(db=db, sort=sort_mode, cursor=None, limit=20)
         assert result is not None
+        assert hasattr(result, "items")
 
     @pytest.mark.asyncio
-    async def test_pinned_problems_prepended_on_first_page(self, mock_db):
-        """Pinned problems are prepended on the first page (cursor=None)."""
-        pinned = _make_problem(is_pinned=True)
-        regular = [_make_problem() for _ in range(3)]
-
-        call_count = 0
-
-        async def mock_execute(stmt, *args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                # First execute: fetch pinned problems
-                return _scalars_result([pinned])
-            # Subsequent: paginated feed
-            return _scalars_result(regular)
-
-        mock_db.execute.side_effect = mock_execute
-
-        result = await get_feed(
-            db=mock_db,
-            sort=SortMode.new,
-            cursor=None,
-            limit=20,
+    async def test_pinned_problems_prepended_on_first_page(self, db):
+        author_id = await seed_user(db)
+        pinned_id = await seed_problem(
+            db, author_id=author_id, status="open", is_pinned=True,
         )
+        for _ in range(3):
+            await seed_problem(db, author_id=author_id, status="open")
 
-        # On first page, pinned items should be present
-        assert result is not None
-        # GAP: Cannot easily assert ordering without inspecting implementation details
+        result = await get_feed(db=db, sort=SortMode.new, cursor=None, limit=20)
+        ids = [it.id for it in result.items]
+        # Pinned must appear, and be at the front
+        assert str(pinned_id) in ids
+        assert ids[0] == str(pinned_id)
 
     @pytest.mark.asyncio
-    async def test_pinned_not_on_subsequent_pages(self, mock_db):
-        """Pinned problems are absent from pages with a non-None cursor."""
-        regular = [_make_problem() for _ in range(3)]
+    async def test_pinned_not_on_subsequent_pages(self, db):
+        """Pages with a non-None cursor must NOT re-prepend pinned items."""
+        author_id = await seed_user(db)
+        pinned_id = await seed_problem(
+            db, author_id=author_id, status="open", is_pinned=True,
+        )
+        for _ in range(5):
+            await seed_problem(db, author_id=author_id, status="open")
 
-        mock_db.execute.return_value = _scalars_result(regular)
-
-        # When cursor is provided, no pinned prepend should happen
-        # GAP: This relies on implementation detail that pinned fetch is skipped when cursor != None
-        import base64, json
-        cursor_payload = base64.urlsafe_b64encode(
-            json.dumps({"sort_value": "2024-01-01T00:00:00Z", "id": str(uuid.uuid4())}).encode()
-        ).decode()
-
-        result = await get_feed(
-            db=mock_db,
-            sort=SortMode.new,
-            cursor=cursor_payload,
-            limit=20,
+        from app.services.feed import encode_cursor
+        from datetime import datetime, timezone
+        cursor_payload = encode_cursor(
+            datetime(2000, 1, 1, tzinfo=timezone.utc), uuid.uuid4(),
         )
 
-        assert result is not None
+        result = await get_feed(
+            db=db, sort=SortMode.new, cursor=cursor_payload, limit=20,
+        )
+        ids = [it.id for it in result.items]
+        assert str(pinned_id) not in ids
 
     @pytest.mark.asyncio
-    async def test_malformed_cursor_raises_http_exception(self, mock_db):
-        """A malformed cursor raises HTTPException with status 400."""
+    async def test_malformed_cursor_raises_http_exception(self, db):
         from fastapi import HTTPException
-
         with pytest.raises(HTTPException) as exc_info:
             await get_feed(
-                db=mock_db,
-                sort=SortMode.new,
-                cursor="!!!notbase64!!!",
-                limit=20,
+                db=db, sort=SortMode.new, cursor="!!!notbase64!!!", limit=20,
             )
-
         assert exc_info.value.status_code == 400
 
 
 # ---------------------------------------------------------------------------
-# Boundary condition tests
+# Boundary conditions — ProblemCreate schema (pure pydantic, no DB)
 # ---------------------------------------------------------------------------
+
 
 class TestBoundaryConditions:
 
-    @pytest.mark.asyncio
-    async def test_title_length_4_raises_validation_error(self):
-        """Title of exactly 4 characters is rejected by ProblemCreate schema."""
+    def test_title_length_4_raises_validation_error(self):
         from pydantic import ValidationError
-
         with pytest.raises(ValidationError):
             ProblemCreate(
-                title="abcd",
-                description="Ten chars!!",
-                category_id=uuid.uuid4(),
-                tag_ids=[],
-                is_anonymous=False,
+                title="abcd", description="Ten chars!!",
+                category_id=str(uuid.uuid4()), tag_ids=[], is_anonymous=False,
             )
 
-    @pytest.mark.asyncio
-    async def test_title_length_5_is_accepted(self):
-        """Title of exactly 5 characters is accepted by ProblemCreate schema."""
+    def test_title_length_5_is_accepted(self):
         schema = ProblemCreate(
-            title="abcde",
-            description="Ten chars!!",
-            category_id=uuid.uuid4(),
-            tag_ids=[],
-            is_anonymous=False,
+            title="abcde", description="Ten chars!!",
+            category_id=str(uuid.uuid4()), tag_ids=[], is_anonymous=False,
         )
         assert len(schema.title) == 5
 
-    @pytest.mark.asyncio
-    async def test_title_length_200_is_accepted(self):
-        """Title of exactly 200 characters is accepted by ProblemCreate schema."""
+    def test_title_length_200_is_accepted(self):
         schema = ProblemCreate(
-            title="a" * 200,
-            description="Ten chars!!",
-            category_id=uuid.uuid4(),
-            tag_ids=[],
-            is_anonymous=False,
+            title="a" * 200, description="Ten chars!!",
+            category_id=str(uuid.uuid4()), tag_ids=[], is_anonymous=False,
         )
         assert len(schema.title) == 200
 
-    @pytest.mark.asyncio
-    async def test_title_length_201_raises_validation_error(self):
-        """Title of exactly 201 characters is rejected by ProblemCreate schema."""
+    def test_title_length_201_raises_validation_error(self):
         from pydantic import ValidationError
-
         with pytest.raises(ValidationError):
             ProblemCreate(
-                title="a" * 201,
-                description="Ten chars!!",
-                category_id=uuid.uuid4(),
-                tag_ids=[],
-                is_anonymous=False,
+                title="a" * 201, description="Ten chars!!",
+                category_id=str(uuid.uuid4()), tag_ids=[], is_anonymous=False,
             )
 
-    @pytest.mark.asyncio
-    async def test_description_length_9_raises_validation_error(self):
-        """Description of exactly 9 characters is rejected by ProblemCreate schema."""
+    def test_description_length_9_raises_validation_error(self):
         from pydantic import ValidationError
-
         with pytest.raises(ValidationError):
             ProblemCreate(
-                title="Hello",
-                description="123456789",
-                category_id=uuid.uuid4(),
-                tag_ids=[],
-                is_anonymous=False,
+                title="Hello", description="123456789",
+                category_id=str(uuid.uuid4()), tag_ids=[], is_anonymous=False,
             )
 
-    @pytest.mark.asyncio
-    async def test_description_length_10_is_accepted(self):
-        """Description of exactly 10 characters is accepted by ProblemCreate schema."""
+    def test_description_length_10_is_accepted(self):
         schema = ProblemCreate(
-            title="Hello",
-            description="1234567890",
-            category_id=uuid.uuid4(),
-            tag_ids=[],
-            is_anonymous=False,
+            title="Hello", description="1234567890",
+            category_id=str(uuid.uuid4()), tag_ids=[], is_anonymous=False,
         )
         assert len(schema.description) == 10
 
-    @pytest.mark.asyncio
-    async def test_tag_ids_empty_is_valid(self):
-        """tag_ids=[] is valid; no ProblemTag rows should be inserted."""
+    def test_tag_ids_empty_is_valid(self):
         schema = ProblemCreate(
-            title="Hello",
-            description="Ten chars!!",
-            category_id=uuid.uuid4(),
-            tag_ids=[],
-            is_anonymous=False,
+            title="Hello", description="Ten chars!!",
+            category_id=str(uuid.uuid4()), tag_ids=[], is_anonymous=False,
         )
         assert schema.tag_ids == []
 
-    @pytest.mark.asyncio
-    async def test_anonymous_defaults_to_false(self):
-        """Omitting is_anonymous defaults to False."""
+    def test_anonymous_defaults_to_false(self):
         schema = ProblemCreate(
-            title="Hello",
-            description="Ten chars!!",
-            category_id=uuid.uuid4(),
-            tag_ids=[],
+            title="Hello", description="Ten chars!!",
+            category_id=str(uuid.uuid4()), tag_ids=[],
         )
         assert schema.is_anonymous is False

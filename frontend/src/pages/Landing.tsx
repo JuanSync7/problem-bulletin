@@ -19,16 +19,16 @@ interface BountyNote {
 }
 
 const BOUNTIES: BountyNote[] = [
-  { title: "Timing closure failure on ALU critical path", tag: "P0", stars: 12, color: "#EF4444" },
-  { title: "DRC violations in metal fill around analog block", tag: "DRC", stars: 8, color: "#3B82F6" },
-  { title: "Scan chain reorder causing coverage drop", tag: "DFT", stars: 5, color: "#22C55E" },
-  { title: "UVM scoreboard mismatch on AXI burst transactions", tag: "UVM", stars: 15, color: "#F59E0B" },
-  { title: "Power grid IR drop exceeding 5% target", tag: "Power", stars: 9, color: "#EF4444" },
-  { title: "Clock tree insertion delay too high", tag: "CTS", stars: 6, color: "#8B5CF6" },
-  { title: "Floorplan congestion near IO ring", tag: "PD", stars: 4, color: "#3B82F6" },
-  { title: "Hold violations after CTS", tag: "Timing", stars: 7, color: "#22C55E" },
-  { title: "ESD clamp sizing for 2kV HBM", tag: "Analog", stars: 3, color: "#F59E0B" },
-  { title: "SRAM bit-cell stability at 0.7V", tag: "Memory", stars: 11, color: "#8B5CF6" },
+  { title: "Timing closure failure on ALU critical path", tag: "P0", stars: 12, color: "#C2453A" },
+  { title: "DRC violations in metal fill around analog block", tag: "DRC", stars: 8, color: "#2D6FB0" },
+  { title: "Scan chain reorder causing coverage drop", tag: "DFT", stars: 5, color: "#1F8A4C" },
+  { title: "UVM scoreboard mismatch on AXI burst transactions", tag: "UVM", stars: 15, color: "#B07A0C" },
+  { title: "Power grid IR drop exceeding 5% target", tag: "Power", stars: 9, color: "#C2453A" },
+  { title: "Clock tree insertion delay too high", tag: "CTS", stars: 6, color: "#6E5BAA" },
+  { title: "Floorplan congestion near IO ring", tag: "PD", stars: 4, color: "#2D6FB0" },
+  { title: "Hold violations after CTS", tag: "Timing", stars: 7, color: "#1F8A4C" },
+  { title: "ESD clamp sizing for 2kV HBM", tag: "Analog", stars: 3, color: "#B07A0C" },
+  { title: "SRAM bit-cell stability at 0.7V", tag: "Memory", stars: 11, color: "#6E5BAA" },
 ];
 
 // Pre-computed scattered positions so they don't shift on re-render

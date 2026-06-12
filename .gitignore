@@ -5,6 +5,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.mypy_cache/
+.pytest_cache/
 
 # Node
 node_modules/
@@ -29,3 +31,9 @@ Thumbs.db
 # Misc
 .pids/
 *.log
+
+# Tooling artefacts
+.backups/
+.claude/
+.delivery/
+.delivery-archive-*/

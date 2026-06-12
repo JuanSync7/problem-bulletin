@@ -138,7 +138,15 @@ async def send_email_digest(
     user_id: str,
     notifications: list[Notification],
 ) -> None:
-    """Render and send a plain-text digest email, then mark notifications as delivered."""
+    """Render and send a plain-text digest email, then mark notifications as delivered.
+
+    Contract (v2.11-WP13, Bucket E5): when *notifications* is an empty
+    list the function returns early (``None``) **before** any database
+    lookup and **before** any SMTP call. Callers do not need to
+    pre-filter — passing an empty list is a guaranteed no-op. This
+    contract is pinned by ``test_send_email_digest_empty_list_is_noop``
+    in ``tests/services/test_notifications.py``.
+    """
     if not notifications:
         return
 
